@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod test;
+pub mod matcher;
+pub mod skip;
 
 use unicode_reader::CodePoints;
 
@@ -32,32 +34,6 @@ pub trait SkipRule {
 
 pub trait Skip {
     fn is_skipping(self: &mut Self, c: char) -> bool;
-}
-
-impl<T: Clone, F: FnMut(Char) -> State<T> + 'static, C: FnMut() -> F> MatchRule<T> for C {
-    fn get(self: &mut Self) -> Box<dyn Matcher<T>> {
-        Box::new(self())
-    }
-}
-
-impl<T: Clone, F: FnMut(Char) -> State<T>> Matcher<T> for F {
-    fn check(self: &mut Self, c: Char) -> State<T> {
-        self(c)
-    }
-
-    fn reset(self: &mut Self) {}
-}
-
-impl<T: Fn(char) -> bool + 'static, C: FnMut() -> T> SkipRule for C {
-    fn get(self: &mut Self) -> Box<dyn Skip> {
-        Box::new(self())
-    }
-}
-
-impl<T: FnMut(char) -> bool> Skip for T {
-    fn is_skipping(self: &mut Self, c: char) -> bool {
-        self(c)
-    }
 }
 
 pub struct Lexer<T> {
