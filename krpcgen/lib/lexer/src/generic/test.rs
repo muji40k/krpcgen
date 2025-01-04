@@ -166,3 +166,22 @@ fn with_kerword() {
     assert!(res.next().is_none());
 }
 
+#[test]
+fn unknown_token() {
+    let mut l = lexer_with_kw();
+
+    let mut res = l.parse_str("let aboba? = first + second");
+
+    assert_eq!(Token::Keyword("let".to_owned()), res.next().unwrap().unwrap());
+    assert_eq!(Token::Identifier("aboba".to_owned()), res.next().unwrap().unwrap());
+    assert!(match res.next().unwrap().unwrap_err() {
+        Error::UnknownToken(None) => true,
+        _ => false,
+    });
+    assert_eq!(Token::Operator("=".to_owned()), res.next().unwrap().unwrap());
+    assert_eq!(Token::Identifier("first".to_owned()), res.next().unwrap().unwrap());
+    assert_eq!(Token::Operator("+".to_owned()), res.next().unwrap().unwrap());
+    assert_eq!(Token::Identifier("second".to_owned()), res.next().unwrap().unwrap());
+    assert!(res.next().is_none());
+}
+
