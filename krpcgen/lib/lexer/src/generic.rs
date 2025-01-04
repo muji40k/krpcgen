@@ -220,7 +220,7 @@ where
             }
         }
 
-        while error.is_none() && 0 == matched {
+        while error.is_none() && 0 == matched && 0 != active {
             match self.next_char() {
                 Err(err) => error = Some(Error::io(err)),
                 Ok(c) => {
@@ -241,23 +241,19 @@ where
                                 _ => {}
                             }
                         });
-
-                    if 0 == matched && 0 == active {
-                        if let Char::EOF = c {
-                            error = Some(Error::unexpected_eof());
-                        } else {
-                            error = Some(Error::unknown_token());
-                        }
-                    }
                 }
             }
         }
 
         if let Some(error) = error {
             Some(Err(error))
+        } else if 0 == matched {
+            Some(Err(match last {
+                Char::EOF => Error::unexpected_eof(),
+                _ => Error::unknown_token(),
+            }))
         } else {
             self.prev = Some(last);
-
             Some(Ok(
                 self.matchers.iter().find_map(|m| match &m.last {
                     State::Matched(v) => Some(v),
