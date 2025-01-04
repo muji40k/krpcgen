@@ -7,6 +7,7 @@ use unicode_reader::CodePoints;
 
 use crate::{Error, Result};
 
+#[derive(Clone)]
 pub enum State<T: Clone> {
     Rejected,
     Matching,
@@ -87,6 +88,27 @@ struct MatcherState<T: Clone> {
     last: State<T>,
 }
 
+impl<T: Clone> MatcherState<T> {
+    fn new(matcher: Box<dyn Matcher<T>>) -> Self {
+        Self {
+            matcher,
+            last: State::Matching,
+        }
+    }
+}
+
+impl<T: Clone> Matcher<T> for MatcherState<T> {
+    fn check(self: &mut Self, c: Char) -> State<T> {
+        self.last = self.matcher.check(c);
+        self.last.clone()
+    }
+
+    fn reset(self: &mut Self) {
+        self.last = State::Matching;
+        self.matcher.reset();
+    }
+}
+
 pub struct TokenIterator<I, T: Clone>
 where
     I: Iterator<Item = std::io::Result<char>>,
@@ -107,12 +129,8 @@ where
         iter: I,
     ) -> Self {
         Self {
-            matchers: matchers
-                .iter_mut()
-                .map(|m| MatcherState {
-                    matcher: m.get(),
-                    last: State::Matching,
-                })
+            matchers: matchers.iter_mut()
+                .map(|m| MatcherState::new(m.get()))
                 .collect(),
             skip: skip.map(|r| r.get()),
             chars: iter,
@@ -124,19 +142,21 @@ where
         if let Some(c) = self.prev.take() {
             Ok(c)
         } else {
-            self.chars
-                .next()
+            self.chars.next()
                 .map(|r| r.map(Char::Char))
                 .unwrap_or(Ok(Char::EOF))
         }
     }
 
     fn reset(self: &mut Self) {
-        self.matchers.iter_mut().for_each(|m| {
-            m.last = State::Matching;
-            m.matcher.reset();
-        })
+        self.matchers.iter_mut().for_each(MatcherState::reset)
     }
+}
+
+enum MatchLock {
+    None,
+    Matching,
+    Matched,
 }
 
 impl<I, T: Clone> Iterator for TokenIterator<I, T>
@@ -197,6 +217,8 @@ where
         }
 
         while error.is_none() && 0 == matched && 0 != active {
+            let mut matching = MatchLock::None;
+
             match self.next_char() {
                 Err(err) => error = Some(Error::io(err)),
                 Ok(c) => {
@@ -206,15 +228,23 @@ where
                             State::Rejected => false,
                             _ => true,
                         })
-                        .for_each(|m| {
-                            m.last = m.matcher.check(c);
-                            match m.last {
-                                State::Rejected => active -= 1,
-                                State::Matched(_) => {
+                        .for_each(|m| match m.check(c) {
+                            State::Rejected => active -= 1,
+                            State::Matched(_) => {
+                                if let MatchLock::Matching = matching {
+                                    error = Some(Error::broken_grammar_msg(
+                                        "Unreacheable higher order rule found"
+                                    ));
+                                } else {
+                                    matching = MatchLock::Matched;
                                     active -= 1;
                                     matched += 1;
                                 }
-                                _ => {}
+                            },
+                            State::Matching => {
+                                if let MatchLock::None = matching {
+                                    matching = MatchLock::Matching;
+                                }
                             }
                         });
                 }

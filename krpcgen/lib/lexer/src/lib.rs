@@ -1,35 +1,6 @@
 
 pub mod generic;
 
-// pub enum Literal {
-//     Integer(i64),
-//     Float(f64),
-//     String(String),
-//     Boolean(bool),
-// }
-//
-// pub enum Bracket {
-//     Left,
-//     Right,
-//     LeftCurly,
-//     RightCurly,
-//     LeftSquare,
-//     RightSquare,
-// }
-//
-// pub enum Token {
-//     Identifier(String),
-//     Keyword(String),
-//
-//     Bracket(Bracket),
-//     Separator(String),
-//
-//     Literal(Literal),
-//
-//     Operator(String),
-//     Comment(String),
-// }
-
 #[derive(Debug)]
 pub enum Error {
     BrokenGrammar(Option<String>),

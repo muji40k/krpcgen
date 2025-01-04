@@ -11,7 +11,7 @@ enum Token {
 fn lexer() -> Lexer<Token> {
     let mut l: Lexer<Token> = Lexer::new();
 
-    l.with_skip(|| |c| char::is_whitespace(c))
+    l.with_skip(|| char::is_whitespace)
      .push_back(|| {
         let mut mem = String::new();
 
