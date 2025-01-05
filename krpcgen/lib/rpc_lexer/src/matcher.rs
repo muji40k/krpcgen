@@ -12,7 +12,7 @@ use lexer::{
     },
 };
 
-use crate::token;
+use rpc::token;
 
 pub fn allowed_chars(c: Char) -> bool {
     match c {

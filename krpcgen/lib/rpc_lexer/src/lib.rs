@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod test;
-pub mod token;
 mod matcher;
 
+use rpc::token;
 use lexer::{
     Lexer,
     generic::Lexer as GenericLexer,
