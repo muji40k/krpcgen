@@ -775,3 +775,206 @@ fn bakery() {
     assert!(tokens.next().is_none());
 }
 
+const UNION_AND_ENUM_TYPE: &str =
+"enum cases
+{
+    NUMBERS = 1,
+    NAME,
+};
+
+union test switch (enum cases value)
+{
+    case NUMBERS:
+        unsigned int values[10];
+    case NAME:
+        string name<>;
+    default:
+        void;
+};";
+
+#[test]
+fn union_enum() {
+    let mut l = lexer();
+    let mut tokens = l.parse_str(UNION_AND_ENUM_TYPE);
+
+    assert_eq!(
+        token::Token::Type(token::Type::Enum),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("cases".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::LeftCurly),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("NUMBERS".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Operator(token::Operator::Assign),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Literal(token::Literal::Integer(1)),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Comma),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("NAME".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Comma),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::RightCurly),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Semicolon),
+        tokens.next().unwrap().unwrap(),
+    );
+
+    assert_eq!(
+        token::Token::Type(token::Type::Union),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("test".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Keyword(token::Keyword::Switch),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::Left),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Type(token::Type::Enum),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("cases".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("value".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::Right),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::LeftCurly),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Keyword(token::Keyword::Case),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("NUMBERS".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Colon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Type(token::Type::Unsigned),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Type(token::Type::Integer),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("values".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::LeftSquare),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Literal(token::Literal::Integer(10)),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::RightSquare),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Semicolon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Keyword(token::Keyword::Case),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("NAME".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Colon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Type(token::Type::String),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Identifier("name".to_string()),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::LeftTriangle),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::RightTriangle),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Semicolon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Keyword(token::Keyword::Default),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Colon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Type(token::Type::Void),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Semicolon),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Bracket(token::Bracket::RightCurly),
+        tokens.next().unwrap().unwrap(),
+    );
+    assert_eq!(
+        token::Token::Separator(token::Separator::Semicolon),
+        tokens.next().unwrap().unwrap(),
+    );
+
+    assert!(tokens.next().is_none());
+}
+
