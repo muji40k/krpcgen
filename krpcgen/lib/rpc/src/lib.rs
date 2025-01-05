@@ -75,3 +75,50 @@ pub struct Module {
     pub programs: std::collections::HashMap<Value, Program>,
 }
 
+pub fn new_enum() -> Enum {
+    std::collections::HashMap::new()
+}
+
+pub fn new_struct() -> Struct {
+    std::collections::HashMap::new()
+}
+
+pub fn new_union() -> Union {
+    Union {
+        switch_type: SwitchingType::Integer(Integer::Integer),
+        arms: std::collections::HashMap::new(),
+        default: None,
+    }
+}
+
+pub fn new_program() -> Program {
+    Program {
+        name: String::new(),
+        versions: std::collections::HashMap::new(),
+    }
+}
+
+pub fn new_version() -> Version {
+    Version {
+        name: String::new(),
+        procedures: std::collections::HashMap::new(),
+    }
+}
+
+pub fn new_procedure() -> Procedure {
+    Procedure {
+        name: String::new(),
+        return_type: Type::Void,
+        arguments: Vec::new(),
+    }
+}
+
+pub fn new_module() -> Module {
+    Module {
+        namespace: std::collections::HashSet::new(),
+        constants: std::collections::HashMap::new(),
+        defined_types: std::collections::HashMap::new(),
+        programs: std::collections::HashMap::new(),
+    }
+}
+
