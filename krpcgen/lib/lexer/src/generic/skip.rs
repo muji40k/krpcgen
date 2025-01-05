@@ -1,7 +1,7 @@
 
 use super::{Skip, SkipRule};
 
-impl<T: Fn(char) -> bool + 'static, C: FnMut() -> T> SkipRule for C {
+impl<T: Skip + 'static, C: FnMut() -> T> SkipRule for C {
     fn get(self: &mut Self) -> Box<dyn Skip> {
         Box::new(self())
     }
