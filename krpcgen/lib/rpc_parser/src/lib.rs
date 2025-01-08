@@ -970,3 +970,49 @@ fn parse_procedure_args(
     }
 }
 
+impl std::error::Error for Error {}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::UnknownDefinition(token) => write!(f,
+                "Expected definition, got: {token:?}"
+            ),
+            Error::UnexpectedToken(msg, token) => write!(f,
+                "Unexpected token: {token:?}\n{msg}"
+            ),
+            Error::ExpressionNotClosed(msg, token) => write!(f,
+                "Expression not closed, got token: {token:?}\n{msg}"
+            ),
+            Error::UnexpectedEOF(msg) => write!(f, "Unexpected EOF\n{msg}"),
+            Error::UndefinedType(msg) => write!(f, "Undefined type\n{msg}"),
+            Error::UndefinedValue(msg) => write!(f, "Undefined value: {msg}"),
+            Error::NonPositiveArraySize(size) => write!(f,
+                "Array size must be greater than 0, got {size}"
+            ),
+            Error::TypeRedefined(msg) => write!(f, "Type redefined\n{msg}"),
+            Error::IdentifierRedefined(msg) => write!(f, "Identifier redefined\n{msg}"),
+            Error::StructureFieldRedefined(msg) => write!(f, "Structure field redefined\n{msg}"),
+            Error::NotSwitchingType(tp) => write!(f,
+                "Only integer type can be used for union identifier, got {tp:?}"
+            ),
+            Error::UnionArmRedefined(arm) => match arm {
+                UnionArm::Regular(v) => write!(f, "Union arm for value {v:?} redefined"),
+                UnionArm::Default => write!(f, "Default union arm redefined"),
+            },
+            Error::UseOfPendingType(msg) => write!(f,
+                "Use of type being defined\n{msg}"
+            ),
+            Error::ProgramNumberReassigned(value) => write!(f,
+                "Program with number {value:?} redefined"
+            ),
+            Error::VersionNumberReassigned(value) => write!(f,
+                "Version with number {value:?} redefined"
+            ),
+            Error::ProcedureNumberReassigned(value) => write!(f,
+                "Procedure with number {value:?} redefined"
+            ),
+        }
+    }
+}
+
