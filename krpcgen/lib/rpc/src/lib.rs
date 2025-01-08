@@ -1,43 +1,41 @@
 
 pub mod token;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     Number(i64),
     Identifier(String),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Integer {
     Integer,
     Hyper,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Float {
     Single,
     Double,
     Quadruple,
 }
 
+#[derive(Debug, Clone)]
 pub enum SwitchingType {
     Integer(Integer),
     Unsigned(Integer),
     Enum(String),
 }
 
-pub type Enum = std::collections::HashMap<String, Option<Value>>;
-pub type Struct = std::collections::HashMap<String, Type>;
-pub struct Union {
-    pub switch_type: SwitchingType,
-    pub arms: std::collections::HashMap<Value, (String, Type)>,
-    pub default: Option<Box<(String, Type)>>,
-}
-
+#[derive(Debug, Clone)]
 pub enum NamedType {
-    Typedef(Box<Type>),
-    Enum(Enum),
-    Struct(Struct),
-    Union(Union),
+    Typedef(String),
+    Enum(String),
+    Struct(String),
+    Union(String),
 }
 
+#[derive(Debug, Clone)]
 pub enum Type {
     Void,
     Integer(Integer),
@@ -49,34 +47,56 @@ pub enum Type {
     Pointer(Box<Type>),
     Array(Box<Type>, usize),
     VArray(Box<Type>, Option<usize>),
-    Named(String, NamedType),
+    Named(NamedType),
 }
 
+#[derive(Debug, Clone)]
 pub struct Program {
     pub name: String,
     pub versions: std::collections::HashMap<Value, Version>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Version {
     pub name: String,
     pub procedures: std::collections::HashMap<Value, Procedure>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Procedure {
     pub name: String,
     pub return_type: Type,
     pub arguments: Vec<Type>,
 }
 
+pub type Enum = Vec<(String, Option<Value>)>;
+pub type Struct = std::collections::HashMap<String, Type>;
+
+#[derive(Debug, Clone)]
+pub struct Union {
+    pub value: String,
+    pub switch_type: SwitchingType,
+    pub arms: std::collections::HashMap<Value, (String, Type)>,
+    pub default: Option<(String, Type)>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Definition {
+    Const(String, Value),
+    Typedef(String, Type),
+    Enum(String, Enum),
+    Struct(String, Struct),
+    Union(String, Union),
+    Program(Value, Program),
+}
+
+#[derive(Debug, Clone)]
 pub struct Module {
-    pub namespace: std::collections::HashSet<String>,
-    pub constants: std::collections::HashMap<String, Value>,
-    pub defined_types: std::collections::HashMap<String, NamedType>,
-    pub programs: std::collections::HashMap<Value, Program>,
+    pub definitions: Vec<Definition>,
 }
 
 pub fn new_enum() -> Enum {
-    std::collections::HashMap::new()
+    Vec::new()
 }
 
 pub fn new_struct() -> Struct {
@@ -85,6 +105,7 @@ pub fn new_struct() -> Struct {
 
 pub fn new_union() -> Union {
     Union {
+        value: String::new(),
         switch_type: SwitchingType::Integer(Integer::Integer),
         arms: std::collections::HashMap::new(),
         default: None,
@@ -115,10 +136,7 @@ pub fn new_procedure() -> Procedure {
 
 pub fn new_module() -> Module {
     Module {
-        namespace: std::collections::HashSet::new(),
-        constants: std::collections::HashMap::new(),
-        defined_types: std::collections::HashMap::new(),
-        programs: std::collections::HashMap::new(),
+        definitions: Vec::new(),
     }
 }
 
