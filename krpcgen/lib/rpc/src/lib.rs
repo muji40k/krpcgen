@@ -7,27 +7,27 @@ pub enum Value {
     Identifier(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Integer {
     Integer,
     Hyper,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Float {
     Single,
     Double,
     Quadruple,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SwitchingType {
     Integer(Integer),
     Unsigned(Integer),
     Enum(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NamedType {
     Typedef(String),
     Enum(String),
@@ -35,7 +35,7 @@ pub enum NamedType {
     Union(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Void,
     Integer(Integer),

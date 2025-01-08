@@ -835,11 +835,15 @@ fn parse_program_versions(
 fn parse_version(
     handle: &mut Handle<impl Iterator<Item=token::Token>>,
 ) -> Result<(rpc::Value, rpc::Version)> {
-    match handle.tokens.next() {                                      // Identifier
+    match handle.tokens.next() {                                      // Version
+        None => Error::unexpected_eof("Version identifier expected".to_owned()),
+        Some(token::Token::Keyword(token::Keyword::Version)) => Ok(()),
+        Some(t) => Error::unexpected_token("Version identifier expected".to_owned(), t),
+    }.and_then(|_| match handle.tokens.next() {                       // Identifier
         None => Error::unexpected_eof("Version identifier expected".to_owned()),
         Some(token::Token::Identifier(id)) => Ok(id),
         Some(t) => Error::unexpected_token("Version identifier expected".to_owned(), t),
-    }.and_then(|pass| match handle.tokens.next() {                    // {
+    }).and_then(|pass| match handle.tokens.next() {                    // {
         None => Error::unexpected_eof("No version body".to_owned()),
         Some(token::Token::Bracket(token::Bracket::LeftCurly)) => Ok(pass),
         Some(t) => Error::unexpected_token("Expected version body \"{\"".to_owned(), t),
