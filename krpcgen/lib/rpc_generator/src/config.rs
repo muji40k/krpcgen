@@ -1,10 +1,10 @@
 
-pub struct Config<'a> {
-    pub path: Option<&'a std::path::Path>,
+pub struct Config<P: AsRef<std::path::Path>> {
+    pub path: Option<P>,
     pub vla_limit: Option<usize>,
 }
 
-impl<'a> Config<'a> {
+impl<P: AsRef<std::path::Path>> Config<P> {
     pub fn new() -> Self {
         Self {
             path: None,
@@ -13,17 +13,17 @@ impl<'a> Config<'a> {
     }
 }
 
-pub(crate) fn path<'a, 'b>(cfg: &'a Option<Config<'b>>) -> &'b std::path::Path {
+pub(crate) fn path<'a, P: AsRef<std::path::Path>>(cfg: &'a Option<Config<P>>) -> &'a std::path::Path {
     match cfg {
         None => std::path::Path::new("."),
-        Some(cfg) => match cfg.path {
+        Some(cfg) => match &cfg.path {
             None => std::path::Path::new("."),
-            Some(p) => p,
+            Some(p) => p.as_ref(),
         },
     }
 }
 
-pub(crate) fn vla_limit(cfg: &Option<Config>) -> usize {
+pub(crate) fn vla_limit<P: AsRef<std::path::Path>>(cfg: &Option<Config<P>>) -> usize {
     match cfg {
         None => 1024,
         Some(cfg) => match &cfg.vla_limit {

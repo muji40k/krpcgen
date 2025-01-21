@@ -13,7 +13,10 @@ mod misc;
 use handle::{ Handle, Type };
 use file::{File, Printable, IteratorPrinter};
 
-pub fn generate(definitions: impl Iterator<Item=rpc::Definition>, cfg: Option<config::Config>) -> std::io::Result<()> {
+pub fn generate(
+    definitions: impl Iterator<Item=rpc::Definition>,
+    cfg: Option<config::Config<impl AsRef<std::path::Path>>>
+) -> std::io::Result<()> {
     let handle = Handle::from_iter(definitions);
 
     [
@@ -26,7 +29,7 @@ pub fn generate(definitions: impl Iterator<Item=rpc::Definition>, cfg: Option<co
 }
 
 fn generate_constants(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     let mut file = file::HFile::new(config::path(cfg).join("constants.h"))
@@ -48,7 +51,7 @@ fn generate_constants(
 }
 
 fn generate_types(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     let mut hfile = file::HFile::new(config::path(cfg).join("types.h"))
@@ -79,7 +82,7 @@ fn generate_types(
 }
 
 fn generate_servers(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     generate_server_program_common(cfg, handle).and_then(|_| {
@@ -93,7 +96,7 @@ fn generate_servers(
 }
 
 fn generate_server_program_common(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     let mut hfile = file::HFile::new(config::path(cfg)
@@ -138,7 +141,7 @@ fn generate_server_program_common(
 }
 
 fn generate_server_program_constants(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -160,7 +163,7 @@ fn generate_server_program_constants(
 }
 
 fn generate_server_program_authentication(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -206,7 +209,7 @@ fn generate_server_program_authentication(
 }
 
 fn generate_server_program_module(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -248,7 +251,7 @@ fn generate_server_program_module(
 }
 
 fn generate_server_program_versions(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -260,7 +263,7 @@ fn generate_server_program_versions(
 }
 
 fn generate_server_version_constants(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -284,7 +287,7 @@ fn generate_server_version_constants(
 }
 
 fn generate_server_version_definition(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -333,7 +336,7 @@ fn generate_server_version_definition(
 }
 
 fn generate_server_version_procedures(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -414,7 +417,7 @@ fn generate_server_version_procedures(
 }
 
 fn generate_clients(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     generate_client_common(cfg, handle).and_then(|_| {
@@ -428,7 +431,7 @@ fn generate_clients(
 }
 
 fn generate_client_common(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     let mut hfile = file::HFile::new(config::path(cfg)
@@ -464,7 +467,7 @@ fn generate_client_common(
 }
 
 fn generate_client_program_constants(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -486,7 +489,7 @@ fn generate_client_program_constants(
 }
 
 fn generate_client_program_authentication(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -533,7 +536,7 @@ fn generate_client_program_authentication(
 }
 
 fn generate_client_program_module(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -571,7 +574,7 @@ fn generate_client_program_module(
 }
 
 fn generate_client_program_versions(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     program: &rpc::Program,
 ) -> std::io::Result<()> {
@@ -583,7 +586,7 @@ fn generate_client_program_versions(
 }
 
 fn generate_client_version_constants(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -607,7 +610,7 @@ fn generate_client_version_constants(
 }
 
 fn generate_client_version_definition(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -655,7 +658,7 @@ fn generate_client_version_definition(
 }
 
 fn generate_client_version_procedures(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
     ver: &rpc::Version,
     prog: &str,
@@ -757,7 +760,7 @@ fn generate_client_version_procedures(
 }
 
 fn generate_make(
-    cfg: &Option<config::Config>,
+    cfg: &Option<config::Config<impl AsRef<std::path::Path>>>,
     handle: &Handle,
 ) -> std::io::Result<()> {
     let mut makefile = file::PlainFile::new(config::path(cfg)

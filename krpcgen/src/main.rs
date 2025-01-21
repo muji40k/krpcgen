@@ -27,18 +27,19 @@ struct Args {
     vla_limit: usize,
 }
 
-fn args_to_config<'a>(args: &'a Args) -> rpc_generator::config::Config<'a> {
-    let mut out = rpc_generator::config::Config::new();
+impl Into<rpc_generator::config::Config<std::path::PathBuf>> for Args {
+    fn into(self) -> rpc_generator::config::Config<std::path::PathBuf> {
+        let mut out = rpc_generator::config::Config::new();
 
-    out.path = Some(std::path::Path::new(&args.path));
-    out.vla_limit = Some(args.vla_limit);
+        out.path = Some(std::path::PathBuf::from(self.path));
+        out.vla_limit = Some(self.vla_limit);
 
-    out
+        out
+    }
 }
 
 fn main() -> Result<(), Error>{
     let args = Args::parse();
-    let config = args_to_config(&args);
 
     let file = std::fs::File::open(&args.specification)?;
     let reader = std::io::BufReader::new(file);
@@ -51,7 +52,7 @@ fn main() -> Result<(), Error>{
 
     let defs = rpc_parser::parse(tokens.into_iter())?;
 
-    rpc_generator::generate(defs.definitions.into_iter(), Some(config))?;
+    rpc_generator::generate(defs.definitions.into_iter(), Some(args.into()))?;
 
     Ok(())
 }

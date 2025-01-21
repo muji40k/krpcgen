@@ -738,7 +738,7 @@ pub struct Constants {
 }
 
 impl Constants {
-    pub fn new(cfg: &Option<config::Config>) -> Self {
+    pub fn new(cfg: &Option<config::Config<impl AsRef<std::path::Path>>>) -> Self {
         Self {
             vla_limit: config::vla_limit(cfg),
         }
