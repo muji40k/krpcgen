@@ -234,13 +234,13 @@ fn generate_server_program_module(
         "MODULE_LICENSE(\"GPL\");",
         ""
     ])).switch(|file|
+        program::server::misc::generate_program_parameters(handle, file)
+    ).chain("").switch(|file|
         program::server::generate_program_version_array(handle, file, program)
     ).chain("").switch(|file|
         program::server::generate_program_declaraion(handle, file, program)
     ).chain("").switch(|file|
-        program::server::generate_program_entrypoint(handle, file, program,
-            config::port(cfg), config::threads(cfg)
-        )
+        program::server::generate_program_entrypoint(handle, file, program)
     ).print(&mut cfile);
 
     cfile.finish();

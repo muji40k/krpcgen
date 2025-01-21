@@ -2,8 +2,6 @@
 pub struct Config<'a> {
     pub path: Option<&'a std::path::Path>,
     pub vla_limit: Option<usize>,
-    pub port: Option<u16>,
-    pub threads: Option<usize>,
 }
 
 impl<'a> Config<'a> {
@@ -11,8 +9,6 @@ impl<'a> Config<'a> {
         Self {
             path: None,
             vla_limit: None,
-            port: None,
-            threads: None,
         }
     }
 }
@@ -36,25 +32,4 @@ pub(crate) fn vla_limit(cfg: &Option<Config>) -> usize {
         },
     }
 }
-
-pub(crate) fn port(cfg: &Option<Config>) -> u16 {
-    match cfg {
-        None => 0,
-        Some(cfg) => match &cfg.port {
-            None => 0,
-            Some(port) => *port,
-        },
-    }
-}
-
-pub(crate) fn threads(cfg: &Option<Config>) -> usize {
-    match cfg {
-        None => 1,
-        Some(cfg) => match &cfg.threads {
-            None => 1,
-            Some(threads) => *threads,
-        },
-    }
-}
-
 

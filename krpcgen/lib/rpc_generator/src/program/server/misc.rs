@@ -8,6 +8,16 @@ use crate::{
     },
 };
 
+pub fn generate_program_parameters(_: &handle::Handle, file: &mut dyn File) {
+    IteratorPrinter::from([
+        "static unsigned short port = 0;",
+        "module_param(port, ushort, 0);",
+        "",
+        "static unsigned int threads = 1;",
+        "module_param(threads, uint, 0);",
+    ]).print(file)
+}
+
 pub fn generate_thread_function_definition(_: &handle::Handle, file: &mut dyn File) {
     "int threadfn(void *data);".print(file)
 }

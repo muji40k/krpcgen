@@ -59,7 +59,7 @@ pub fn generate_program_declaraion(handle: &handle::Handle, file: &mut dyn File,
     ]).print(file)
 }
 
-pub fn generate_program_entrypoint(_: &handle::Handle, file: &mut dyn File, progr: &rpc::Program, port: u16, threads: usize) {
+pub fn generate_program_entrypoint(_: &handle::Handle, file: &mut dyn File, progr: &rpc::Program) {
     IteratorPrinter::from([
         format!("static struct svc_stat stat;"),
         format!("static struct svc_serv *server = NULL;"),
@@ -69,7 +69,7 @@ pub fn generate_program_entrypoint(_: &handle::Handle, file: &mut dyn File, prog
         format!("    server = svc_create(&{}_program, 0, threadfn);", progr.name),
         format!(""),
         format!("    int rc = 0;"),
-        format!("    int port = {port};"),
+        format!("    int cport = port;"),
         format!(""),
         format!("    if (NULL == server) {{"),
         format!("        rc = -EINVAL;"),
@@ -80,17 +80,17 @@ pub fn generate_program_entrypoint(_: &handle::Handle, file: &mut dyn File, prog
         format!("    }}"),
         format!(""),
         format!("    if (0 == rc) {{"),
-        format!("        rc = svc_xprt_create(server, \"tcp\", &init_net, AF_INET, port, 0, get_current_cred());"),
-        format!("        port = rc > 0 ? rc : port;"),
+        format!("        rc = svc_xprt_create(server, \"tcp\", &init_net, AF_INET, cport, 0, get_current_cred());"),
+        format!("        cport = rc > 0 ? rc : cport;"),
         format!("        rc = rc < 0 ? rc : 0;"),
         format!("    }}"),
         format!(""),
         format!("    if (0 == rc) {{"),
-        format!("        rc = svc_set_num_threads(server, NULL, {threads});"),
+        format!("        rc = svc_set_num_threads(server, NULL, threads);"),
         format!("    }}"),
         format!(""),
         format!("    if (0 == rc) {{"),
-        format!("        printk(\"[{}] RPC server started at port: %d\\n\", port);", progr.name),
+        format!("        printk(\"[{}] RPC server started at port: %d\\n\", cport);", progr.name),
         format!("    }} else {{"),
         format!("        printk(\"[{}] RPC server setup error: %pe\\n\", ERR_PTR(rc));", progr.name),
         format!("    }}"),
