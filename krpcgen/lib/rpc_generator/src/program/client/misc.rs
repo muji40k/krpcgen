@@ -52,7 +52,7 @@ pub fn generate_client_misc_declaration(_: &handle::Handle, file: &mut dyn File)
         "    struct sockaddr_in sin = {",
         "        .sin_family      = AF_INET,",
         "        .sin_addr.s_addr = decode_host_ip(),",
-        "        .sin_addr.s_port = htons(port),",
+        "        .sin_port = htons(port),",
         "    };",
         "",
         "    struct rpc_create_args args = {",
