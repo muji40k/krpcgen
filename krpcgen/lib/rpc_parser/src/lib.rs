@@ -217,9 +217,16 @@ fn parse_definition(
 fn parse_value(
     handle: &mut Handle<impl Iterator<Item=token::Token>>,
 ) -> Result<rpc::Value> {
+    parse_value_condition(handle, |num| Ok(num))
+}
+
+fn parse_value_condition<F: FnOnce(i64) -> Result<i64>>(
+    handle: &mut Handle<impl Iterator<Item=token::Token>>,
+    cond: F,
+) -> Result<rpc::Value> {
     match handle.tokens.next() {
         None => Error::unexpected_eof("Expected value".to_string()),
-        Some(token::Token::Literal(token::Literal::Integer(num))) => Ok(rpc::Value::Number(num)),
+        Some(token::Token::Literal(token::Literal::Integer(num))) => cond(num).map(|num| rpc::Value::Number(num)),
         Some(token::Token::Identifier(id)) => match handle.values.get(&id) {
             Some(_) => Ok(rpc::Value::Identifier(id)),
             None => Error::undefined_value(id),
@@ -318,34 +325,31 @@ fn parse_array_type(handle: &mut Handle<impl Iterator<Item=token::Token>>, tp: r
     match handle.tokens.next() {
         Some(token::Token::Bracket(br)) => match br {
             token::Bracket::LeftTriangle => match handle.tokens.next() {
-                None => Error::unexpected_eof("Expected variadic array size or closing bracket".to_string()),
-                Some(token::Token::Literal(token::Literal::Integer(num))) => match num.cmp(&0) {
-                    std::cmp::Ordering::Greater => Ok(Some(num)),
-                    _ => Error::non_positive_array_size(num),
-                },
-                Some(token::Token::Bracket(token::Bracket::RightTriangle)) => {
-                    handle.tokens.push_back(token::Token::Bracket(token::Bracket::RightTriangle));
-                    Ok(None)
-                },
-                Some(t) => Error::unexpected_token("Expected variadic array size or closing bracket".to_string(), t),
-            }.map(|num| num.map(|num| num as usize))
-            .and_then(|num| match handle.tokens.next() {
-                None => Error::unexpected_eof("Expected variadic array closing bracket".to_string()),
+                None => Error::unexpected_eof("Expected variadic array closing bracket or size hint".to_string()),
                 Some(token::Token::Bracket(token::Bracket::RightTriangle)) =>
-                    Ok(rpc::Type::VArray(Box::new(tp), num)),
-                Some(t) => Error::unexpected_token("Expected variadic array closing bracket".to_string(), t),
-            }),
-            token::Bracket::LeftSquare => match handle.tokens.next() {
-                None => Error::unexpected_eof("Expected array size".to_string()),
-                Some(token::Token::Literal(token::Literal::Integer(num))) => match num.cmp(&0) {
-                    std::cmp::Ordering::Greater => Ok(num),
-                    _ => Error::non_positive_array_size(num),
+                    Ok(rpc::Type::VArray(Box::new(tp), None)),
+                Some(t) => {
+                    handle.tokens.push_back(t);
+                    parse_value_condition(handle, |num| if 0 >= num {
+                        Error::non_positive_array_size(num)
+                    } else {
+                        Ok(num)
+                    }).and_then(|v| match handle.tokens.next() {
+                        None => Error::unexpected_eof("Expected variadic array closing bracket".to_string()),
+                        Some(token::Token::Bracket(token::Bracket::RightTriangle)) =>
+                            Ok(rpc::Type::VArray(Box::new(tp), Some(v))),
+                        Some(t) => Error::unexpected_token("Expected variadic array closing bracket".to_string(), t),
+                    })
                 },
-                Some(t) => Error::unexpected_token("Expected array size".to_string(), t),
-            }.and_then(|num| match handle.tokens.next() {
+            },
+            token::Bracket::LeftSquare => parse_value_condition(handle, |num| if 0 >= num {
+                Error::non_positive_array_size(num)
+            } else {
+                Ok(num)
+            }).and_then(|v| match handle.tokens.next() {
                 None => Error::unexpected_eof("Expected array closing bracket".to_string()),
                 Some(token::Token::Bracket(token::Bracket::RightSquare)) =>
-                    Ok(rpc::Type::Array(Box::new(tp), num as usize)),
+                    Ok(rpc::Type::Array(Box::new(tp), v)),
                 Some(t) => Error::unexpected_token("Expected array closing bracket".to_string(), t),
             }),
             _ => {
@@ -951,16 +955,21 @@ fn parse_procedure_args(
     let mut out = rpc::new_procedure();
     let mut error: Option<Error> = None;
 
-    while match parse_type(handle)                    // Type
-        .map(|tp| out.arguments.push(tp))
-        .and_then(|_| Ok(match handle.tokens.next() { // [,]
-            None => false,
-            Some(token::Token::Separator(token::Separator::Comma)) => true,
-            Some(t) => {
-                handle.tokens.push_back(t);
-                false
-            },
-        })) {
+    while match parse_type(handle)              // Type
+        .and_then(|tp| match tp {
+            rpc::Type::Void if 0 == out.arguments.len() => Ok(false),
+            _ => {
+                out.arguments.push(tp);
+                Ok(match handle.tokens.next() { // [,]
+                    None => false,
+                    Some(token::Token::Separator(token::Separator::Comma)) => true,
+                    Some(t) => {
+                        handle.tokens.push_back(t);
+                        false
+                    },
+                })
+            }
+        }) {
         Ok(next) => next,
         Err(err) => {
             error = Some(err);

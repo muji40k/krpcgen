@@ -3,11 +3,12 @@ mod printables;
 pub mod asc;
 
 use crate::{
+    handle,
     config,
     file::{ File, Printable, IteratorPrinter },
 };
 
-pub fn uses_dynamic_memory(handle: &super::Handle, tp: &rpc::Type) -> bool {
+pub fn uses_dynamic_memory(handle: &handle::Handle, tp: &rpc::Type) -> bool {
     match tp {
         rpc::Type::Void => false,
         rpc::Type::Integer(_) => false,
@@ -37,9 +38,77 @@ pub fn uses_dynamic_memory(handle: &super::Handle, tp: &rpc::Type) -> bool {
     }
 }
 
+fn append_or_self(s: Option<String>, current: String) -> String {
+    s.map(|out| out + "+" + &current).unwrap_or(current)
+}
+
+fn generate_xdr_size_inner(handle: &handle::Handle, tp: &rpc::Type, out: Option<String>) -> String {
+    match tp {
+        rpc::Type::Void => append_or_self(out, String::from("0")),
+        rpc::Type::Pointer(tp) => generate_xdr_size_inner(handle, tp,
+            Some(append_or_self(out, format!("sizeof(u32)")))
+        ),
+        rpc::Type::Array(tp, sz) => append_or_self(out,
+            format!("{}*({})", asc::value(sz), generate_xdr_size(handle, tp))
+        ),
+        rpc::Type::VArray(tp, sz) => {
+            append_or_self(out,
+                format!("sizeof(u32)+{}*({})",
+                    sz.as_ref().map_or_else(
+                        || String::from("VLA_LIMIT"),
+                        asc::value,
+                    ),
+                    generate_xdr_size(handle, tp)
+                )
+            )
+        }
+        rpc::Type::Named(named) => match named {
+            rpc::NamedType::Typedef(name) => generate_xdr_size_inner(
+                handle,
+                handle.module.types.typedefs.get(name).expect("Was added"),
+                out
+            ),
+            rpc::NamedType::Enum(name) =>
+                append_or_self(out, format!("sizeof(enum {name})")),
+            rpc::NamedType::Struct(name) => handle.module.types.structs.get(name)
+                .expect("Was added").values()
+                .fold(out, |out, tp| {
+                    Some(append_or_self(out, generate_xdr_size(handle, tp)))
+                }).expect("At least one field in struct"),
+            rpc::NamedType::Union(name) => {
+                let un = handle.module.types.unions.get(name).expect("Was added");
+
+                append_or_self(out, format!("{}+{}",
+                    generate_switch_xdr_size(handle, &un.switch_type),
+                    un.arms.values().chain(un.default.iter()).map(|(_, v)| v)
+                        .map(|current| generate_xdr_size(handle, current))
+                        .reduce(|prev, next| format!("STATIC_MAX(({prev}),({next}))"))
+                        .expect("At least one field in union")
+                ))
+            },
+        },
+        _ => append_or_self(out, format!("sizeof({})", asc::typename(&asc::fulltype(tp)))),
+    }
+}
+
+pub fn generate_xdr_size(handle: &handle::Handle, tp: &rpc::Type) -> String {
+    generate_xdr_size_inner(handle, tp, None)
+}
+
+fn generate_switch_xdr_size(handle: &handle::Handle, tp: &rpc::SwitchingType) -> String {
+    match tp.clone() {
+        rpc::SwitchingType::Integer(integer) =>
+            generate_xdr_size(handle, &rpc::Type::Integer(integer)),
+        rpc::SwitchingType::Unsigned(integer) =>
+            generate_xdr_size(handle, &rpc::Type::Unsigned(integer)),
+        rpc::SwitchingType::Enum(name) =>
+            generate_xdr_size(handle, &rpc::Type::Named(rpc::NamedType::Enum(name))),
+    }
+}
+
 pub fn generate_release_statement(
-    handle: &super::Handle,
-    file: &mut impl File,
+    handle: &handle::Handle,
+    file: &mut dyn File,
     tp: &rpc::Type,
     access: &str,
     offset: Option<usize>,
@@ -60,17 +129,21 @@ pub fn generate_release_statement(
             format!("{soffset}}}").print(file);
         },
         rpc::Type::Array(tp, sz) => {
-            format!("{soffset}for (size_t i = 0; {sz} > i; i++) {{").print(file);
+            format!("{soffset}for (size_t i = 0; {} > i; i++) {{", asc::value(sz)).print(file);
             generate_release_statement(handle, file, tp, &format!("({access})[i]"), Some(offset + 4));
             format!("{soffset}}}").print(file);
         },
         rpc::Type::VArray(tp, _) => {
             format!("{soffset}if (NULL != ({access}).data) {{").print(file);
             if uses_dynamic_memory(handle, tp) {
-                let (tname, arr) = asc::fulltype(tp);
-                let arr = arr.unwrap_or_else(|| String::new());
-                format!("{soffset}    {tname} (*_base){arr} = ({tname} (*){arr})(({access}).data);").print(file);
-                format!("{soffset}    {tname} (*base){arr} = _base;").print(file);
+                let ctype = asc::fulltype(tp);
+                format!("{soffset}    {} = ({})(({access}).data);",
+                    asc::pointer_declaration("_base", &ctype),
+                    asc::pointer_declaration("", &ctype),
+                ).print(file);
+                format!("{soffset}    {} = _base;",
+                    asc::pointer_declaration("base", &ctype),
+                ).print(file);
                 format!("{soffset}    for (size_t i = 0; ({access}).size > i; i++) {{").print(file);
                 generate_release_statement(handle, file, tp, "base[i]", Some(offset + 8));
                 format!("{soffset}    }}").print(file);
@@ -120,15 +193,15 @@ pub fn generate_release_statement(
                     access, Some(offset)
                 );
             },
-            _ => panic!("Not expected to be freed: {tp:?}"),
+            _ => {},
         },
-        _ => panic!("Not expected to be freed: {tp:?}"),
+        _ => {},
     }
 }
 
 fn generate_switch_decode_statement(
-    handle: &super::Handle,
-    file: &mut impl File,
+    handle: &handle::Handle,
+    file: &mut dyn File,
     tp: &rpc::SwitchingType,
     access: &str,
     rc: Option<&str>,
@@ -149,8 +222,8 @@ fn generate_switch_decode_statement(
 }
 
 pub fn generate_decode_statement(
-    handle: &super::Handle,
-    file: &mut impl File,
+    handle: &handle::Handle,
+    file: &mut dyn File,
     tp: &rpc::Type,
     access: &str,
     rc: Option<&str>,
@@ -213,7 +286,7 @@ pub fn generate_decode_statement(
             format!("{soffset}}}"),
         ]).print(file),
         rpc::Type::Pointer(tp) => {
-            let tname = asc::typename(tp);
+            let tname = asc::typename(&asc::fulltype(tp));
             IteratorPrinter::from([
                 format!("{soffset}{{"),
                 format!("{soffset}    int _rc = 0;"),
@@ -246,13 +319,13 @@ pub fn generate_decode_statement(
                 format!("{soffset}{{"),
                 format!("{soffset}    int _rc = 0;"),
                 format!("{soffset}    if (0 == {rc}"),
-                format!("{soffset}        && 0 > (_rc = xdr_stream_decode_opaque(xdr, {access}, {sz}))) {{"),
+                format!("{soffset}        && 0 > (_rc = xdr_stream_decode_opaque(xdr, {access}, {}))) {{", asc::value(sz)),
                 format!("{soffset}        {rc} = _rc;"),
                 format!("{soffset}    }}"),
                 format!("{soffset}}}"),
             ]).print(file),
             _ => {
-                format!("{soffset}for (size_t i = 0; 0 == {rc} && {sz} > i; i++) {{").print(file);
+                format!("{soffset}for (size_t i = 0; 0 == {rc} && {} > i; i++) {{", asc::value(sz)).print(file);
                 generate_decode_statement(handle, file, tp,
                     &format!("({access})[i]"), Some(rc), Some(offset + 4)
                 );
@@ -260,10 +333,9 @@ pub fn generate_decode_statement(
             },
         },
         rpc::Type::VArray(tp, sz) => {
-            let (tname, arr) = asc::fulltype(tp);
-            let arr = arr.as_ref().map(String::as_str).unwrap_or("");
-            let name = format!("{tname}{arr}");
-            let sz = sz.as_ref().map(|sz| sz.to_string())
+            let ctype = asc::fulltype(tp);
+            let name = asc::typename(&ctype);
+            let sz = sz.as_ref().map(asc::value)
                 .unwrap_or_else(|| String::from("VLA_LIMIT"));
             IteratorPrinter::from([
                 format!("{soffset}{{"),
@@ -274,8 +346,8 @@ pub fn generate_decode_statement(
                 format!("{soffset}    }}"),
                 format!("{soffset}    if (0 == {rc} && {sz} < ({access}).size) {{"),
                 format!("{soffset}        {rc} = -EMSGSIZE;"),
-                format!("{soffset}    }} else if (0 == {rc} && 0 != size) {{"),
-                format!("{soffset}        ({access}).data = kmalloc(sizeof({name}) * ({access}).size), GFP_KERNEL);"),
+                format!("{soffset}    }} else if (0 == {rc} && 0 != ({access}).size) {{"),
+                format!("{soffset}        ({access}).data = kmalloc(sizeof({name}) * ({access}).size, GFP_KERNEL);"),
                 format!("{soffset}        if (NULL == ({access}).data) {{"),
                 format!("{soffset}            {rc} = -ENOMEM;"),
                 format!("{soffset}        }} else {{"),
@@ -298,8 +370,13 @@ pub fn generate_decode_statement(
                 ]).print(file),
                 _ => {
                     IteratorPrinter::from([
-                        format!("{soffset}            {tname} *_base{arr} = ({tname} (*){arr})(({access}).data)"),
-                        format!("{soffset}            {tname} *base{arr} = _base"),
+                        format!("{soffset}            {} = ({})(({access}).data);",
+                            asc::pointer_declaration("_base", &ctype),
+                            asc::pointer_declaration("", &ctype),
+                        ),
+                        format!("{soffset}            {} = _base;",
+                            asc::pointer_declaration("base", &ctype),
+                        ),
                         format!("{soffset}            for (size_t i = 0; 0 == {rc} && ({access}).size > i; i++) {{"),
                     ]).print(file);
                     generate_decode_statement(handle, file, tp,
@@ -380,8 +457,8 @@ pub fn generate_decode_statement(
 }
 
 fn generate_switch_encode_statement(
-    handle: &super::Handle,
-    file: &mut impl File,
+    handle: &handle::Handle,
+    file: &mut dyn File,
     tp: &rpc::SwitchingType,
     access: &str,
     rc: Option<&str>,
@@ -402,8 +479,8 @@ fn generate_switch_encode_statement(
 }
 
 pub fn generate_encode_statement(
-    handle: &super::Handle,
-    file: &mut impl File,
+    handle: &handle::Handle,
+    file: &mut dyn File,
     tp: &rpc::Type,
     access: &str,
     rc: Option<&str>,
@@ -495,12 +572,12 @@ pub fn generate_encode_statement(
                 rpc::Type::Opaque => IteratorPrinter::from([
                     format!("{soffset}    int _rc = 0;"),
                     format!("{soffset}    if (0 == {rc}"),
-                    format!("{soffset}        && 0 > (_rc = xdr_stream_encode_opaque(xdr, {access}, {sz}))) {{"),
+                    format!("{soffset}        && 0 > (_rc = xdr_stream_encode_opaque(xdr, {access}, {}))) {{", asc::value(sz)),
                     format!("{soffset}        {rc} = _rc;"),
                     format!("{soffset}    }}"),
                 ]).print(file),
                 _ => {
-                    format!("{soffset}    for (size_t i = 0; 0 == {rc} && {sz} > i; i++) {{").print(file);
+                    format!("{soffset}    for (size_t i = 0; 0 == {rc} && {} > i; i++) {{", asc::value(sz)).print(file);
                     generate_encode_statement(handle, file, tp,
                         &format!("({access})[i]"), Some(rc), Some(offset + 8)
                     );
@@ -510,9 +587,7 @@ pub fn generate_encode_statement(
             format!("{soffset}}}").print(file);
         },
         rpc::Type::VArray(tp, sz) => {
-            let (tname, arr) = asc::fulltype(tp);
-            let arr = arr.as_ref().map(String::as_str).unwrap_or("");
-            let sz = sz.as_ref().map(|sz| sz.to_string())
+            let sz = sz.as_ref().map(asc::value)
                 .unwrap_or_else(|| String::from("VLA_LIMIT"));
             IteratorPrinter::from([
                 format!("{soffset}{{"),
@@ -529,28 +604,27 @@ pub fn generate_encode_statement(
                 format!("{soffset}        && 0 > (_rc = xdr_stream_encode_u32(xdr, ({access}).size))) {{"),
                 format!("{soffset}        {rc} = _rc;"),
                 format!("{soffset}    }}"),
-                format!("{soffset}    if (0 == {rc} && 0 != size) {{"),
+                format!("{soffset}    if (0 == {rc} && 0 != ({access}).size) {{"),
             ]).print(file);
 
             match tp.as_ref() {
-                rpc::Type::Opaque => IteratorPrinter::from([
+                rpc::Type::Opaque | rpc::Type::String => IteratorPrinter::from([
                     format!("{soffset}        int _rc = 0;"),
                     format!("{soffset}        if (0 == {rc}"),
                     format!("{soffset}            && 0 > (_rc = xdr_stream_encode_opaque(xdr, ({access}).data, ({access}).size))) {{"),
                     format!("{soffset}            {rc} = _rc;"),
                     format!("{soffset}        }}"),
                 ]).print(file),
-                rpc::Type::String => IteratorPrinter::from([
-                    format!("{soffset}        int _rc = 0;"),
-                    format!("{soffset}        if (0 == {rc}"),
-                    format!("{soffset}            && 0 > (_rc = xdr_stream_encode_string(xdr, ({access}).data, ({access}).size))) {{"),
-                    format!("{soffset}            {rc} = _rc;"),
-                    format!("{soffset}        }}"),
-                ]).print(file),
                 _ => {
+                    let ctype = asc::fulltype(tp);
                     IteratorPrinter::from([
-                        format!("{soffset}        {tname} *_base{arr} = ({tname} (*){arr})(({access}).data)"),
-                        format!("{soffset}        {tname} *base{arr} = _base"),
+                        format!("{soffset}        {} = ({})(({access}).data);",
+                            asc::pointer_declaration("_base", &ctype),
+                            asc::pointer_declaration("", &ctype),
+                        ),
+                        format!("{soffset}        {} = _base;",
+                            asc::pointer_declaration("base", &ctype),
+                        ),
                         format!("{soffset}        for (size_t i = 0; 0 == {rc} && ({access}).size > i; i++) {{"),
                     ]).print(file);
                     generate_encode_statement(handle, file, tp,
@@ -624,14 +698,38 @@ pub fn generate_encode_statement(
     }
 }
 
-pub fn misc_types(file: &mut impl File) {
+pub fn generate_argument_wrap_struct(_: &handle::Handle, proc: &rpc::Procedure) -> (String, rpc::Struct) {
+    (
+        format!("{}_argument_wrap", proc.name),
+        proc.arguments.iter()
+            .enumerate()
+            .map(|(i, tp)| (format!("arg{i}"), tp.clone()))
+            .collect()
+    )
+}
+
+pub fn generate_argument_wrap(handle: &handle::Handle, file: &mut dyn File, proc: &rpc::Procedure) -> bool {
+    if 1 >= proc.arguments.len() {
+        false
+    } else {
+        let st = generate_argument_wrap_struct(handle, proc);
+        (&st.0, &st.1).print(file);
+        true
+    }
+
+}
+
+pub fn misc_types(file: &mut dyn File) {
     IteratorPrinter::from([
+        "#define STATIC_MAX(a, b) (((a) > (b)) ? (a) : (b))",
+        "",
         "struct _vla {",
-        "    u32 size;     // Amount of elements (For more information see the specification)",
+        "    u32 size;   // Amount of elements (For more information see the specification)",
         "    void *data;",
         "};",
         "typedef struct _vla vla_t;",
         "typedef struct _vla string_t;",
+        "#define vla(type) vla_t",
     ]).print(file);
 }
 
@@ -647,7 +745,7 @@ impl Constants {
     }
 }
 
-pub fn misc_constants(file: &mut impl File, cfg: Constants) {
+pub fn misc_constants(file: &mut dyn File, cfg: Constants) {
     IteratorPrinter::from([
         format!("#define VLA_LIMIT {}", cfg.vla_limit),
     ]).print(file);

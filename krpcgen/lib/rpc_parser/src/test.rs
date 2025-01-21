@@ -55,28 +55,28 @@ macro_rules! assert_versions{
 
 macro_rules! assert_procedures{
     ( $proc: expr, ) => {};
-    ( $proc: expr, #$number: expr => $proc_name: ident ($($type: expr),+) => $rtype: expr, $($rest: tt)* ) => {
+    ( $proc: expr, #$number: expr => $proc_name: ident ($($type: expr),*) => $rtype: expr, $($rest: tt)* ) => {
         {
             let v = rpc::Value::Number($number);
             match $proc.get(&v) {
                 None => panic!("No procedure with value {v:?} found"),
                 Some(proc) => {
                     assert_eq!(stringify!{$proc_name}, proc.name);
-                    assert_eq!(vec![$($type),+], proc.arguments);
+                    assert_eq!(Vec::<rpc::Type>::from([$($type),*]), proc.arguments);
                     assert_eq!($rtype, proc.return_type);
                 }
             }
         }
         assert_procedures!($proc, $($rest)*);
     };
-    ( $proc: expr, $number: ident => $proc_name: ident ($($type: expr),+) => $rtype: expr, $($rest: tt)* ) => {
+    ( $proc: expr, $number: ident => $proc_name: ident ($($type: expr),*) => $rtype: expr, $($rest: tt)* ) => {
         {
             let v = rpc::Value::Identifier(String::from(stringify!{$number}));
             match $proc.get(&v) {
                 None => panic!("No procedure with value {v:?} found"),
                 Some(proc) => {
                     assert_eq!(stringify!{$proc_name}, proc.name);
-                    assert_eq!(vec![$($type),+], proc.arguments);
+                    assert_eq!(vec![$($type),*], proc.arguments);
                     assert_eq!($rtype, proc.return_type);
                 }
             }
@@ -152,11 +152,11 @@ fn ping() {
         Some(rpc::Definition::Program(v, progr)) => assert_program!((v, progr),
             #200000 => PING_PROG[2] {
                 #2 => PING_VERS_PINGBACK[2] {
-                    #0 => PINGPROC_NULL(rpc::Type::Void) => rpc::Type::Void,
-                    #1 => PINGPROC_PINGBACK(rpc::Type::Void) => rpc::Type::Integer(rpc::Integer::Integer),
+                    #0 => PINGPROC_NULL() => rpc::Type::Void,
+                    #1 => PINGPROC_PINGBACK() => rpc::Type::Integer(rpc::Integer::Integer),
                 },
                 #1 => PING_VERS_ORIG[1] {
-                    #0 => PINGPROC_NULL(rpc::Type::Void) => rpc::Type::Void,
+                    #0 => PINGPROC_NULL() => rpc::Type::Void,
                 },
             }
         ),

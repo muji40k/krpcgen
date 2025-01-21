@@ -1,27 +1,18 @@
 
-pub enum Target {
-    Constants,
-    Types,
-    Client,
-    Server,
-    Makefile,
-    All,
-}
-
 pub struct Config<'a> {
     pub path: Option<&'a std::path::Path>,
-    pub project_name: Option<String>,
     pub vla_limit: Option<usize>,
-    pub target: Option<Target>,
+    pub port: Option<u16>,
+    pub threads: Option<usize>,
 }
 
 impl<'a> Config<'a> {
     pub fn new() -> Self {
         Self {
             path: None,
-            project_name: None,
             vla_limit: None,
-            target: None,
+            port: None,
+            threads: None,
         }
     }
 }
@@ -36,22 +27,32 @@ pub(crate) fn path<'a, 'b>(cfg: &'a Option<Config<'b>>) -> &'b std::path::Path {
     }
 }
 
-pub(crate) fn project_name<'a, 'b>(cfg: &'a Option<Config<'b>>) -> &'a str {
-    match cfg {
-        None => "",
-        Some(cfg) => match &cfg.project_name {
-            None => "",
-            Some(name) => name.as_str(),
-        },
-    }
-}
-
-pub(crate) fn vla_limit<'a>(cfg: &Option<Config<'a>>) -> usize {
+pub(crate) fn vla_limit(cfg: &Option<Config>) -> usize {
     match cfg {
         None => 1024,
         Some(cfg) => match &cfg.vla_limit {
             None => 1024,
             Some(limit) => *limit,
+        },
+    }
+}
+
+pub(crate) fn port(cfg: &Option<Config>) -> u16 {
+    match cfg {
+        None => 0,
+        Some(cfg) => match &cfg.port {
+            None => 0,
+            Some(port) => *port,
+        },
+    }
+}
+
+pub(crate) fn threads(cfg: &Option<Config>) -> usize {
+    match cfg {
+        None => 1,
+        Some(cfg) => match &cfg.threads {
+            None => 1,
+            Some(threads) => *threads,
         },
     }
 }

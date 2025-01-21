@@ -36,12 +36,12 @@ fn inner_fulltype(tp: &rpc::Type, buf: (Option<String>, Option<String>)) -> (Str
         )),
         rpc::Type::Array(tp, sz) => inner_fulltype(tp, (
             buf.0,
-            buf.1.map(|rest| format!("{rest}[{sz}]"))
-                .or_else(|| Some(format!("[{sz}]"))),
+            buf.1.map(|rest| format!("{rest}[{}]", value(sz)))
+                .or_else(|| Some(format!("[{}]", value(sz)))),
         )),
         rpc::Type::VArray(tp, _) => match tp.as_ref() {
             rpc::Type::String => (append_or_new(buf.0, "string_t"), buf.1),
-            _ => (append_or_new(buf.0, "vla_t"), buf.1),
+            _ => (append_or_new(buf.0, &format!("vla({})", typename(&fulltype(tp)))), buf.1),
         },
         rpc::Type::Named(named) => match named {
             rpc::NamedType::Typedef(name) =>
@@ -58,16 +58,23 @@ pub fn fulltype(tp: &rpc::Type) -> (String, Option<String>) {
     inner_fulltype(tp, (None, None))
 }
 
-pub fn declaration(name: &str, tp: &rpc::Type) -> String {
-    match fulltype(tp) {
-        (tname, Some(arr)) => tname + " " + name + &arr,
-        (tname, None) => tname + " " + name,
+pub fn declaration(name: &str, tp: &(String, Option<String>)) -> String {
+    match tp {
+        (tname, Some(arr)) => tname.to_owned() + " " + name + &arr,
+        (tname, None) => tname.to_owned() + " " + name,
     }
 }
 
-pub fn typename(tp: &rpc::Type) -> String {
-    let (tname, arr) = fulltype(tp);
-    tname + arr.as_ref().map(String::as_str).unwrap_or("")
+pub fn pointer_declaration(name: &str, tp: &(String, Option<String>)) -> String {
+    match tp {
+        (tname, Some(arr)) => tname.to_string() + " (*" + name + ")" + &arr,
+        (tname, None) => tname.to_string() + "* " + name,
+    }
+}
+
+pub fn typename(tp: &(String, Option<String>)) -> String {
+    let (tname, arr) = tp;
+    tname.to_string() + arr.as_ref().map(String::as_str).unwrap_or("")
 }
 
 pub fn switching_declaraion(name: &str, tp: &rpc::SwitchingType) -> String {

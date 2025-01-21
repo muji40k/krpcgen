@@ -7,24 +7,55 @@ pub trait File {
 }
 
 pub trait Printable {
-    fn print<F: File>(self: Self, file: &mut F);
-}
+    fn print(self: Self, file: &mut dyn File);
 
-impl<P: Printable + Copy> Printable for &P {
-    fn print<F: File>(self: Self, file: &mut F) {
-        (*self).print(file)
+    fn chain<P: Printable>(self: Self, other: P) -> impl Printable
+    where
+        Self: Sized
+    {
+        ChainPrinter(self, other)
+    }
+
+    fn switch<FO: FnOnce(&mut dyn File)>(self: Self, f: FO) -> impl Printable
+    where
+        Self: Sized
+    {
+        ChainPrinter(self, f)
     }
 }
 
 impl Printable for &str {
-    fn print<F: File>(self: Self, file: &mut F) {
+    fn print(self: Self, file: &mut dyn File) {
         file.add_line(self.to_string());
     }
 }
 
 impl Printable for String {
-    fn print<F: File>(self: Self, file: &mut F) {
+    fn print(self: Self, file: &mut dyn File) {
         file.add_line(self);
+    }
+}
+
+pub struct FnPrinter<P: Printable, FC: FnOnce() -> P>(FC);
+
+impl<P: Printable, FC: FnOnce() -> P> From<FC> for FnPrinter<P, FC> {
+    fn from(value: FC) -> Self {
+        FnPrinter(value)
+    }
+}
+
+impl<P: Printable, FC: FnOnce() -> P> Printable for FnPrinter<P, FC> {
+    fn print(self: Self, file: &mut dyn File) {
+        (self.0)().print(file)
+    }
+}
+
+impl<P: Printable> Printable for Option<P> {
+    fn print(self: Self, file: &mut dyn File) {
+        match self {
+            Some(inner) => inner.print(file),
+            None => {},
+        }
     }
 }
 
@@ -37,18 +68,33 @@ impl<P: Printable, II: IntoIterator<Item=P>> From<II> for IteratorPrinter<P, II:
 }
 
 impl<P: Printable, I: Iterator<Item=P>> Printable for IteratorPrinter<P, I> {
-    fn print<F: File>(self: Self, file: &mut F) {
+    fn print(self: Self, file: &mut dyn File) {
         self.0.for_each(|p| p.print(file))
     }
 }
 
-pub struct CFile<P: AsRef<std::path::Path>> {
+pub struct ChainPrinter<P1: Printable + Sized, P2: Printable>(P1, P2);
+
+impl<P1: Printable, P2:Printable> Printable for ChainPrinter<P1, P2> {
+    fn print(self: Self, file: &mut dyn File) {
+        self.0.print(file);
+        self.1.print(file);
+    }
+}
+
+impl<FO: FnOnce(&mut dyn File)> Printable for FO {
+    fn print(self: Self, file: &mut dyn File) {
+        (self)(file)
+    }
+}
+
+pub struct PlainFile<P: AsRef<std::path::Path>> {
     path: P,
     buffer: Vec<String>,
     result: std::io::Result<()>,
 }
 
-impl<P: AsRef<std::path::Path>> CFile<P> {
+impl<P: AsRef<std::path::Path>> PlainFile<P> {
     pub fn new(path: P) -> Self {
         Self {
             path,
@@ -62,7 +108,7 @@ impl<P: AsRef<std::path::Path>> CFile<P> {
     }
 }
 
-impl<P: AsRef<std::path::Path>> File for CFile<P> {
+impl<P: AsRef<std::path::Path>> File for PlainFile<P> {
     fn add_line(self: &mut Self, line: String) {
         self.buffer.push(line)
     }
@@ -85,6 +131,8 @@ impl<P: AsRef<std::path::Path>> File for CFile<P> {
     }
 }
 
+pub type CFile<P> = PlainFile<P>;
+
 pub struct HFile<P: AsRef<std::path::Path>> {
     base: CFile<P>,
     finished: bool,
@@ -93,22 +141,22 @@ pub struct HFile<P: AsRef<std::path::Path>> {
 impl<P: AsRef<std::path::Path>> HFile<P> {
     pub fn new(path: P) -> Option<Self> {
         let pathr = path.as_ref();
-        match pathr.file_name() {
-            None => None,
-            Some(filename) => match filename.to_str() {
-                None => None,
-                Some(filename) => {
-                    let name = format!{"_{}_", filename.replace(".", "_").to_uppercase()};
-                    let mut base = CFile::new(path);
+        pathr.iter()
+            .filter(|item| "." != *item)
+            .map(|item| item.to_str())
+            .try_fold(String::new(), |acc, item| item.map(|item| {
+                acc + "_" + &item.replace(".", "_").to_uppercase()
+            }))
+            .map(|res| res + "_")
+            .and_then(|name| {
+                let mut base = CFile::new(path);
 
-                    format!{"#ifndef {name}"}.print(&mut base);
-                    format!{"#define {name}"}.print(&mut base);
-                    "".print(&mut base);
+                format!{"#ifndef {name}"}.print(&mut base);
+                format!{"#define {name}"}.print(&mut base);
+                "".print(&mut base);
 
-                    Some(Self { base, finished: false})
-                }
-            }
-        }
+                Some(Self { base, finished: false})
+            })
     }
 
     pub fn result(self: Self) -> std::io::Result<()> {

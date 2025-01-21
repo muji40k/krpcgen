@@ -45,21 +45,21 @@ pub enum Type {
     String,
     Opaque,
     Pointer(Box<Type>),
-    Array(Box<Type>, usize),
-    VArray(Box<Type>, Option<usize>),
+    Array(Box<Type>, Value),
+    VArray(Box<Type>, Option<Value>),
     Named(NamedType),
 }
 
 #[derive(Debug, Clone)]
 pub struct Program {
     pub name: String,
-    pub versions: std::collections::HashMap<Value, Version>,
+    pub versions: indexmap::IndexMap<Value, Version>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Version {
     pub name: String,
-    pub procedures: std::collections::HashMap<Value, Procedure>,
+    pub procedures: indexmap::IndexMap<Value, Procedure>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,13 +70,13 @@ pub struct Procedure {
 }
 
 pub type Enum = Vec<(String, Option<Value>)>;
-pub type Struct = std::collections::HashMap<String, Type>;
+pub type Struct = indexmap::IndexMap<String, Type>;
 
 #[derive(Debug, Clone)]
 pub struct Union {
     pub value: String,
     pub switch_type: SwitchingType,
-    pub arms: std::collections::HashMap<Value, (String, Type)>,
+    pub arms: indexmap::IndexMap<Value, (String, Type)>,
     pub default: Option<(String, Type)>,
 }
 
@@ -100,14 +100,14 @@ pub fn new_enum() -> Enum {
 }
 
 pub fn new_struct() -> Struct {
-    std::collections::HashMap::new()
+    indexmap::IndexMap::new()
 }
 
 pub fn new_union() -> Union {
     Union {
         value: String::new(),
         switch_type: SwitchingType::Integer(Integer::Integer),
-        arms: std::collections::HashMap::new(),
+        arms: indexmap::IndexMap::new(),
         default: None,
     }
 }
@@ -115,14 +115,14 @@ pub fn new_union() -> Union {
 pub fn new_program() -> Program {
     Program {
         name: String::new(),
-        versions: std::collections::HashMap::new(),
+        versions: indexmap::IndexMap::new(),
     }
 }
 
 pub fn new_version() -> Version {
     Version {
         name: String::new(),
-        procedures: std::collections::HashMap::new(),
+        procedures: indexmap::IndexMap::new(),
     }
 }
 

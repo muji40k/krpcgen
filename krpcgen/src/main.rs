@@ -15,6 +15,6 @@ fn main() {
 
     let defs = rpc_parser::parse(tokens.into_iter()).expect("tests");
 
-    rpc_generator::testies(defs.definitions.into_iter(), Some(config)).expect("tests");
+    rpc_generator::generate(defs.definitions.into_iter(), Some(config)).expect("tests");
 }
 
