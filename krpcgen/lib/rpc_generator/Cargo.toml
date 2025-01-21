@@ -1,0 +1,8 @@
+[package]
+name = "rpc_generator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+indexmap = "2.7.1"
+rpc = { version = "0.1.0", path = "../rpc" }

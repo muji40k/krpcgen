@@ -1,0 +1,12 @@
+[package]
+name = "krpcgen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.27", features = ["derive"] }
+lexer = { version = "0.1.0", path = "lib/lexer" }
+rpc = { version = "0.1.0", path = "lib/rpc" }
+rpc_generator = { version = "0.1.0", path = "lib/rpc_generator" }
+rpc_lexer = { version = "0.1.0", path = "lib/rpc_lexer" }
+rpc_parser = { version = "0.1.0", path = "lib/rpc_parser" }

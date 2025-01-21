@@ -1,0 +1,8 @@
+[package]
+name = "rpc_lexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lexer = { version = "0.1.0", path = "../lexer" }
+rpc = { version = "0.1.0", path = "../rpc" }
