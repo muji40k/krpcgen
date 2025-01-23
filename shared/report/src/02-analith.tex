@@ -1,0 +1,360 @@
+\leftsection{Аналитическая часть}
+
+\vspace{-1\baselineskip}
+
+\subsection{Постановка задачи}
+
+В соответствии с заданием на курсовую работу необходимо разработать приложение,
+генерирующее код загружаемых модулей ядра клиента и сервера, взаимодействующих
+по протоколу ONC RPC, согласно описанной спецификации.
+
+Для достижения поставленной цели необходимо решить следующие задачи:
+\begin{enumerate}
+    \item провести анализ составных частей протокола, способов представления и
+          передачи информации;
+    \item рассмотреть структуры и функции ядра, реализующие клиентскую и
+          серверную стороны будущего приложения, определить порядок их
+          инициализации и вызова;
+    \item разработать алгоритм загружаемых модулей ядра;
+    \item разработать алгоритм разбора файла спецификации и генерации
+          соответствующих модулей на его основании;
+    \item проанализировать результаты работы разработанного приложения.
+\end{enumerate}
+
+\subsection{Анализ протокола ONC RPC}
+
+\subsubsection{Описание модели взаимодействия}
+
+\subsubsection{Структурные части}
+
+\subsubsection{Описание типов данных}
+
+\subsection{Поддержка в ядре Linux}
+
+В ядре реализация RPC представлена в составе модуля \code{sunrpc}, который
+может быть скомпилирован как часть ядра или загружаемый модуль.
+
+Перед использованием, модуль должен быть загружен при помощи команды
+\code{modprobe sunrpc}, после чего разработчику становится доступна кодовая
+база для написания клиента и сервера приложения. В дальнейшем, структуры и
+функции будут рассматриваться для версии ядра 6.12.7~\cite{LinuxKernel6127}.
+
+\subsubsection{Инициализация и порядок работы сервера}
+
+Сервер описывается структурой \code{svc_serv} (листинг~\ref{lst:struct_svc_serv})
+и называется сервисом, который в свою очередь является демоном, отвечающим за
+прием и обработку сообщений, а так же поддержание потоков обработчиков.
+
+\begin{lstlisting}[caption={Структура сервиса}, label={lst:struct_svc_serv}]
+struct svc_serv {
+    /* Массив программ и его размер */
+    struct svc_program *    sv_programs;
+    unsigned int            sv_nprogs;
+    /* Число потоков обработчиков */
+    unsigned int        sv_nrthreads;
+    /* Максимальное количество соединений.
+     * Равно числу потоков, если указан 0 */
+    unsigned int        sv_maxconn;
+    struct svc_stat *   sv_stats;
+    spinlock_t          sv_lock;
+    /* Размеры буфера и сообщения */
+    unsigned int        sv_max_payload;
+    unsigned int        sv_max_mesg;
+    unsigned int        sv_xdrsize;
+    /* Списки сокетов */
+    struct list_head    sv_permsocks;
+    struct list_head    sv_tempsocks;
+    int                 sv_tmpcnt;
+    struct timer_list   sv_temptimer;
+    char *          sv_name;
+    /* Пул потоков */
+    unsigned int        sv_nrpools;
+    bool                sv_is_pooled;
+    struct svc_pool *   sv_pools;
+    /* Функция потока обработчика */
+    int         (*sv_threadfn)(void *data);
+#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+    struct lwq      sv_cb_list;
+    bool            sv_bc_enabled;
+#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+};
+\end{lstlisting}
+
+Сервис может быть создан в однопоточном или многопоточном варианте с
+использованием функций \code{svc_create} и \code{svc_create_pooled}
+(листинг~\ref{lst:svc_create}), которые приводят последующему вызову
+\code{__svc_create}. Функция создает и инициализирует структуру
+\code{svc_serv}, из примечательных моментов, максимальный размер сообщения
+\code{sv_max_payload} имеет значение по умолчанию, равное одной странице (при
+использовании значения 0 для параметра \code{bufsize}).
+
+\begin{lstlisting}[caption={Создание сервиса}, label={lst:svc_create}]
+struct svc_serv *svc_create(struct svc_program *prog,
+                            unsigned int bufsize,
+                            int (*threadfn)(void *data));
+struct svc_serv *svc_create_pooled(struct svc_program *prog,
+                                   unsigned int nprog,
+                                   struct svc_stat *stats,
+                                   unsigned int bufsize,
+                                   int (*threadfn)(void *data));
+\end{lstlisting}
+
+Программа, ее версии и процедуры описываются следующими структурами,
+представленными на листингах
+\refrange{lst:struct_svc_program}{lst:struct_svc_procedure}. Соответствующие
+массивы версий и процедур могут быть определены как статически, так и
+динамически.
+
+\begin{lstlisting}[caption={Структура программы}, label={lst:struct_svc_program}]
+struct svc_program {
+    /* Номер программы */
+    u32         pg_prog;
+    /* Минимальная и максимальная обслуживаемые версии */
+    unsigned int        pg_lovers;
+    unsigned int        pg_hivers;
+    /* Массива версий и его размер */
+    unsigned int        pg_nvers;
+    const struct svc_version **pg_vers;
+    /* Название программы */
+    char *          pg_name;
+    /* Название класса прграмм, разделяющих аутентификацию,
+     * используется общий кеш */
+    char *          pg_class;
+    /* Пользовательский обработчик аутентификации */
+    enum svc_auth_status    (*pg_authenticate)(struct svc_rqst *rqstp);
+    /* Функция инициализации контекста потока */
+    __be32          (*pg_init_request)(struct svc_rqst *,
+                           const struct svc_program *,
+                           struct svc_process_info *);
+    /* Функция регистрации сервиса (portmapper) */
+    int         (*pg_rpcbind_set)(struct net *net,
+                          const struct svc_program *,
+                          u32 version, int family,
+                          unsigned short proto,
+                          unsigned short port);
+};
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Структура версии}, label={lst:struct_svc_version}]
+struct svc_version {
+    /* Номер версии */
+    u32         vs_vers;
+    /* Массив процедур и их количество */
+    const struct svc_procedure *vs_proc;
+    u32                         vs_nproc;
+    unsigned long __percpu  *vs_count;
+    /* Размер буфера сообщения */
+    u32         vs_xdrsize;
+    /* Используется ли portmapper */
+    bool            vs_hidden;
+    /* Игнорируется ли ошибка регистрации */
+    bool            vs_rpcb_optnl;
+    bool            vs_need_cong_ctrl;
+    /* Функция диспетчеризации */
+    int         (*vs_dispatch)(struct svc_rqst *rqstp);
+};
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Структура процедуры}, label={lst:struct_svc_procedure}]
+struct svc_procedure {
+    /* Реализация функции обработчика процедуры */
+    __be32          (*pc_func)(struct svc_rqst *);
+    /* Кодирование и декодирование */
+    bool            (*pc_decode)(struct svc_rqst *rqstp,
+                         struct xdr_stream *xdr); // аргументы
+    bool            (*pc_encode)(struct svc_rqst *rqstp,
+                         struct xdr_stream *xdr); // результат
+    /* Очистка использованных значений */
+    void            (*pc_release)(struct svc_rqst *);
+    /* Размер аргумента и количество байт, которые должны быть очищены */
+    unsigned int        pc_argsize;
+    unsigned int        pc_argzero;
+    /* Размер результата и максимальный размер сообщения */
+    unsigned int        pc_ressize;
+    unsigned int        pc_xdrressize;
+    unsigned int        pc_cachetype;
+    const char *        pc_name;
+};
+\end{lstlisting}
+
+Инициализация сервиса не приводит к его регистрации, запуску или созданию
+транспортной инфраструктуры. Типичная последовательность запуска представлена
+на листинге~\ref{lst:svc_start_proc}.
+
+\begin{lstlisting}[caption={Последовательность регистрации и запуска сервиса}, label={lst:svc_start_proc}]
+// 1
+int svc_bind(struct svc_serv *serv, struct net *net);
+// 2
+int svc_xprt_create(struct svc_serv *serv, const char *xprt_name,
+                    struct net *net, const int family,
+                    const unsigned short port, int flags,
+                    const struct cred *cred);
+// 3
+int svc_set_num_threads(struct svc_serv *serv, struct svc_pool *pool,
+                        int nrservs);
+\end{lstlisting}
+
+Вызов \code{svc_bind}, вопреки названию, не регистрирует сервис у portmapper,
+но удаляет существующие записи других сервисов, если они использую номера вновь
+созданной программы.
+
+Регистрация же производится при создании нового транспорта в функции
+\code{svс_xprt_create}. Зарегистрированные протоколы содержатся в списке
+\code{svc_xprt_class_list} и описываются структурой \code{svc_xprt_class}
+(листинг~\ref{lst:struct_svc_xprt_class}). В настоящий момент возможно
+использовать только TCP или UDP. Вызов \code{svc_xprt_create} осуществляет
+поиск транспорта по его названию, переданному параметром \code{xprt_name},
+после чего вызывается метод \code{xpo_create}, значение которого совпадает для
+обоих протоколов --- \code{svc_create_socket}. Функция создает сокет
+(\code{__sock_create}), связывает его с переданным адресом
+(\code{kernel_bind}) и вызывает \code{setup_socket}, где и происходит
+регистрация нового сервиса вызовом \code{svc_register}, который вызывает метод
+\code{pg_rpcbind_set} текущей программы для каждой ее версии. При
+использовании rpcbind, в ядре определена стандартная реализация метода ---
+\code{svc_generic_rpcbind_set}.
+
+\begin{lstlisting}[caption={Структура транспортного протокола и операции над ним}, label={lst:struct_svc_xprt_class}]
+struct svc_xprt_class {
+    const char                *xcl_name;
+    struct module             *xcl_owner;
+    const struct svc_xprt_ops *xcl_ops;
+    struct list_head           xcl_list;
+    u32                        xcl_max_payload;
+    int                        xcl_ident;
+};
+struct svc_xprt_ops {
+    struct svc_xprt *(*xpo_create)(struct svc_serv *,
+                                   struct net *net,
+                                   struct sockaddr *, int,
+                                   int);
+    struct svc_xprt *(*xpo_accept)(struct svc_xprt *);
+    int              (*xpo_has_wspace)(struct svc_xprt *);
+    int              (*xpo_recvfrom)(struct svc_rqst *);
+    int              (*xpo_sendto)(struct svc_rqst *);
+    int              (*xpo_result_payload)(struct svc_rqst *,
+                                           unsigned int,
+                                           unsigned int);
+    void             (*xpo_release_ctxt)(struct svc_xprt *xprt,
+                                         void *ctxt);
+    void             (*xpo_detach)(struct svc_xprt *);
+    void             (*xpo_free)(struct svc_xprt *);
+    void             (*xpo_kill_temp_xprt)(struct svc_xprt *);
+    void             (*xpo_handshake)(struct svc_xprt *xprt);
+};
+\end{lstlisting}
+
+После чего остается запустить обработчик функцией \\
+\code{svc_set_num_threads}. Вызов создает поток ядра и начинает выполнять
+функцию из поля \code{sv_threadfn} сервиса. Ядро не предоставляет готовых
+решений для обработчика, поэтому его необходимо определить самостоятельно.
+Минимальный пример реализации представлен на листинге \ref{lst:threadfn}.
+
+\begin{lstlisting}[caption={Минимальная реализация функции потока}, label={lst:threadfn}]
+int threadfn(void *data) {
+    struct svc_rqst *rqstp = data;
+    svc_thread_init_status(rqstp, 0);
+
+    while (!svc_thread_should_stop(rqstp)) {
+        svc_recv(rqstp);
+    }
+
+    svc_exit_thread(rqstp);
+
+    return 0;
+}
+\end{lstlisting}
+
+После инициализации в начале обработчика необходимо вызвать функцию
+\code{svc_thread_init_status}, передающую статус основному потоку, позволяя ему
+продолжить работу. В случае заявления ошибки, функция также останавливает и
+поток обработчика. Далее идет основной поток обработки запросов:
+\code{svc_thread_should_stop} --- проверяет необходимо ли завершить поток
+обработчик; \code{svc_recv} --- получает запрос и вызывает обработчик
+\code{svc_process}, если в настоящий момент нет доступных запросов, то поток
+переключается в состояние idle.
+
+Работа сервиса прекращается повторным вызовом функции \\
+\code{svc_set_num_threads} c параметром \code{nrservs} равным 0. Получив сигнал
+к завершению (установкой бита \code{SP_NEED_VICTIM}), поток должен прекратить
+работу и вызвать \code{svc_exit_thread} для очистки контекста потока и
+информирования основного потока о завершении (сброс бита
+\code{SP_VICTIM_REMAINS}).
+
+Обработка запроса происходит внутри функции \code{svc_process}, алгоритм
+которой представлен на
+рисунках~\refrange{fig:algorithm_svc_process}{fig:algorithm_svc_process_common_2}.
+
+\clearpage
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{svc_process_pt1.pdf_tex}
+    \caption{Схема алгоритма функции \code{svc_process}}
+    \label{fig:algorithm_svc_process}
+\end{figure}
+\vfill
+
+\clearpage
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{svc_process_pt2.pdf_tex}
+    \caption{Схема алгоритма функции \code{svc_process_common} (часть 1)}
+    \label{fig:algorithm_svc_process_common_1}
+\end{figure}
+\vfill
+
+\clearpage
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{svc_process_pt3.pdf_tex}
+    \caption{Схема алгоритма функции \code{svc_process} (часть 2)}
+    \label{fig:algorithm_svc_process_common_2}
+\end{figure}
+\vfill
+
+\clearpage
+
+Шаблонная реализация метода программы \code{pg_init_request} представлена в
+функции \code{svc_generic_init_request} и выполняет следующие задачи:
+\begin{itemize}
+    \item проверка существования запрашиваемой версии и процедуры;
+    \item получение структуры \code{svc_procedure} (поле \code{rq_procinfo});
+    \item инициализация полей аргумента и результата
+          (\code{rq_argp} и \code{rq_resp});
+    \item получение функции диспетчеризации (\code{vs_dispatch}).
+\end{itemize}
+
+Для функции диспетчеризации не предусмотрено готовое решение, однако из
+алгоритма обработки запроса видно, что остается преобразовать полученные
+аргументы (\code{pc_decode}), выполнить функцию обработчик запрашиваемой
+процедуры (\code{pc_func}) и закодировать результат (\code{pc_encode}).
+Минимальный пример такой функции представлен в листинге~\ref{lst:dispatch}.
+
+\begin{lstlisting}[caption={Минимальная реализация функции диспетчеризации}, label={lst:dispatch}]
+int dispatch(struct svc_rqst *rqstp) {
+    const struct svc_procedure *proc = rqstp->rq_procinfo;
+    __be32 *statp = rqstp->rq_accept_statp;
+    if (!proc->pc_decode(rqstp, &rqstp->rq_arg_stream)) {
+        *statp = rpc_garbage_args;
+        return 0;
+    }
+    *statp = proc->pc_func(rqstp);
+    if (!proc->pc_encode(rqstp, &rqstp->rq_res_stream)) {
+        *statp = rpc_system_err;
+        return 0;
+    }
+    return 1;
+}
+\end{lstlisting}
+
+\subsubsection{Порядок выполнения запроса}
+
+\subsubsection{Преобразованием аргументов и результата}
+
+\subsection*{Вывод}
+
