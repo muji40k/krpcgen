@@ -354,7 +354,263 @@ int dispatch(struct svc_rqst *rqstp) {
 
 \subsubsection{Порядок выполнения запроса}
 
-\subsubsection{Преобразованием аргументов и результата}
+Аналогичные структуры для описания программы определены и для клиента
+(листинги~\refrange{lst:struct_rpc_program}{lst:struct_rpc_procedure}).
+
+\clearpage
+
+\begin{lstlisting}[caption={Структура программы}, label={lst:struct_rpc_program}]
+struct rpc_program {
+    /* Название программы */
+    const char *                name;
+    /* Номер программы */
+    u32                         number;
+    /* Массив версий и их количество */
+    const struct rpc_version ** version;
+    unsigned int                nrvers;
+    struct rpc_stat *           stats;
+    const char *                pipe_dir_name;
+};
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Структура версии}, label={lst:struct_rpc_version}]
+struct rpc_version {
+    /* Номер версии */
+    u32                        number;
+    /* Массив процедур и их количество */
+    const struct rpc_procinfo *procs;
+    unsigned int               nrprocs;
+    /* Количество вызовов */
+    unsigned int              *counts;
+};
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Структура процедуры}, label={lst:struct_rpc_procedure}]
+struct rpc_procinfo {
+    /* Номер процедуры */
+    u32          p_proc;
+    /* Кодирование аргументов */
+    kxdreproc_t  p_encode;
+    /* Декодирование результатов */
+    kxdrdproc_t  p_decode;
+    /* Размер */
+    unsigned int p_arglen; /* аргумент */
+    unsigned int p_replen; /* результат */
+    /* Ожидаемое время задержки */
+    unsigned int p_timer;
+    u32          p_statidx;
+    /* Название процедуры */
+    const char  *p_name;
+};
+\end{lstlisting}
+
+Для вызова процедуры необходимо вызвать одну из следующих функций оберток,
+представленных в листинге~\ref{lst:rpc_call}. Или же инициализировать и
+запустить задачу, описываемую структурой \code{rpc_task}, вручную
+(листинг~\ref{lst:rpc_task}).
+
+\begin{lstlisting}[caption={Прототип функций вызова удаленных процедур}, label={lst:rpc_call}]
+// Содержимое вызова
+struct rpc_message {
+    /* Информация о процедуре */
+    const struct rpc_procinfo *rpc_proc;
+    /* Аргументы */
+    void *                     rpc_argp;
+    /* Результат */
+    void *                     rpc_resp;
+    const struct cred *        rpc_cred;
+};
+
+// Функции обратного вызова
+struct rpc_call_ops {
+    void (*rpc_call_prepare)(struct rpc_task *, void *);
+    void (*rpc_call_done)(struct rpc_task *, void *);
+    void (*rpc_count_stats)(struct rpc_task *, void *);
+    void (*rpc_release)(void *);
+};
+
+int     rpc_call_async(struct rpc_clnt *clnt,
+                       const struct rpc_message *msg,
+                       int flags,
+                       const struct rpc_call_ops *tk_ops,
+                       void *calldata);
+int     rpc_call_sync(struct rpc_clnt *clnt,
+                      const struct rpc_message *msg, int flags);
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Структура \code{rpc_task}}, label={lst:rpc_task}]
+struct rpc_task_setup {
+    struct rpc_task           *task;
+    struct rpc_clnt           *rpc_client;
+    struct rpc_xprt           *rpc_xprt;
+    struct rpc_cred           *rpc_op_cred;
+    const struct rpc_message  *rpc_message;
+    const struct rpc_call_ops *callback_ops;
+    void                      *callback_data;
+    struct workqueue_struct   *workqueue;
+    unsigned short             flags;
+    signed char                priority;
+};
+
+struct rpc_task *rpc_run_task(const struct rpc_task_setup *);
+\end{lstlisting}
+
+Вызов процедуры описан конечной машиной состояний. Возможные состояния задачи и
+переходы между ними представлены в таблицах~\ref{tbl:rpc_task_states}
+и~\ref{tbl:rpc_task_state_transfers}.
+
+\clearpage
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+        \caption{Состояния задачи}
+        \begin{tabular}{|r|l|l|}
+        \hline
+        \multicolumn{1}{|c|}{Номер} & \multicolumn{1}{c|}{Название} & \multicolumn{1}{c|}{Назначение}                                                               \\ \hline
+        1                           & call\_start                   & Начальное состояние                                                                           \\ \hline
+        2                           & call\_reserve                 & Выделение слота транспортного протокола                                                       \\ \hline
+        3                           & call\_reserveresult           & Проверка выделенного слота                                                                    \\ \hline
+        4                           & call\_retry\_reserve          & Повторная попытка выделения слота                                                             \\ \hline
+        5                           & call\_refresh                 & Обновление удостоверяющей информации                                                          \\ \hline
+        6                           & call\_refreshresult           & Проверка удостоверяющей информации                                                            \\ \hline
+        7                           & call\_allocate                & Выделение буфера                                                                              \\ \hline
+        8                           & call\_encode                  & Кодирование аргументов                                                                        \\ \hline
+        9                           & call\_bind                    & Получение порта программы                                                                     \\ \hline
+        10                          & call\_connect                 & Соединение с сервером                                                                         \\ \hline
+        11                          & call\_bind\_status            & Обработка релультатов rpcbind                                                                 \\ \hline
+        12                          & call\_connect\_status         & Обработка результата соединения                                                               \\ \hline
+        13                          & call\_transmit                & Отправка запроса                                                                              \\ \hline
+        14                          & call\_transmit\_status        & Проверка статуса передачи                                                                     \\ \hline
+        15                          & call\_status                  & Проверка статуса запроса                                                                      \\ \hline
+        16                          & call\_decode                  & Декодирование результата                                                                      \\ \hline
+        17                          & rpc\_exit\_task               & \begin{tabular}[c]{@{}l@{}}Фиктивное состояние завершения\\ и разрушения запроса\end{tabular} \\ \hline
+        \end{tabular}
+        \label{tbl:rpc_task_states}
+    \end{threeparttable}
+\end{table}
+
+\vspace{\fill}
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+        \caption{Переходы состояний задачи}
+\begin{tabular}{|R{0.15\textwidth}|R{0.08\textwidth}|L{0.65\textwidth}|}
+\hline
+\multicolumn{1}{|c|}{Инициатор} & \multicolumn{1}{c|}{Цель} & \multicolumn{1}{c|}{Причина (при наличии)}                                                                       \\ \hline
+\multirow{2}{*}{1}              & 2                         & Иначе                                                                                                            \\ \cline{2-3} 
+                                & 17                        & Клиент выключен                                                                                                  \\ \hline
+2                               & 3                         & \multicolumn{1}{c|}{-}                                                                                           \\ \hline
+\multirow{3}{*}{3}              & 4                         & Не удалось выделить слот (EAGAIN | ENOMEM)                                                                       \\ \cline{2-3} 
+                                & 5                         & Слот выделен                                                                                                     \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+4                               & 3                         & \multicolumn{1}{c|}{-}                                                                                           \\ \hline
+5                               & 6                         & \multicolumn{1}{c|}{-}                                                                                           \\ \hline
+\multirow{4}{*}{6}              & \multirow{2}{*}{5}        & ENOMEM                                                                                                           \\ \cline{3-3} 
+                                &                           & Просроченное удостоверение                                                                                       \\ \cline{2-3} 
+                                & 7                         & Актуальное удостоверение                                                                                         \\ \cline{2-3} 
+                                & 17                        & Превышено число повторений                                                                                       \\ \hline
+\multirow{3}{*}{7}              & 7                         & \begin{tabular}[c]{@{}l@{}}RPC\_IS\_ASYNC\\ и не получен фатальный сигнал\end{tabular}                           \\ \cline{2-3} 
+                                & 8                         & Буфер выделен                                                                                                    \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+\end{tabular}
+        \label{tbl:rpc_task_state_transfers}
+    \end{threeparttable}
+\end{table}
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+Продолжение таблицы~\ref{tbl:rpc_task_state_transfers}
+\begin{tabular}{|R{0.15\textwidth}|R{0.08\textwidth}|L{0.65\textwidth}|}
+\hline
+\multirow{5}{*}{8}              & 9                         & Порт сервиса не получен                                                                                          \\ \cline{2-3} 
+                                & 10                        & Соединение не установлено                                                                                        \\ \cline{2-3} 
+                                & 13                        & \begin{tabular}[c]{@{}l@{}}Кодирование успешно\\ и соединениеустановлено\end{tabular}                            \\ \cline{2-3} 
+                                & \multirow{2}{*}{17}       & Не удалось закодировать заголовок                                                                                \\ \cline{3-3} 
+                                &                           & Иная ошибка                                                                                                      \\ \hline
+\multirow{3}{*}{9}              & 10                        & Порт уже получен                                                                                                 \\ \cline{2-3} 
+                                & 11                        & Иначе                                                                                                            \\ \cline{2-3} 
+                                & 14                        & Запрос уже отправлен                                                                                             \\ \hline
+\multirow{3}{*}{10}             & 12                        & Иначе                                                                                                            \\ \cline{2-3} 
+                                & 13                        & Соединение уже установлено                                                                                       \\ \cline{2-3} 
+                                & 14                        & Запрос уже отправлен                                                                                             \\ \hline
+\multirow{5}{*}{11}             & \multirow{2}{*}{9}        & \begin{tabular}[c]{@{}l@{}}Некритичная ошибка\\ (ENOMEM | EACCESS | ENOBUFS | EAGAIN\\ | ETIMEDOUT)\end{tabular} \\ \cline{3-3} 
+                                &                           & \begin{tabular}[c]{@{}l@{}}Сетевая ошибка\\ (если сброшен флаг SOFTCONN)\end{tabular}                            \\ \cline{2-3} 
+                                & 10                        & Порт получен                                                                                                     \\ \cline{2-3} 
+                                & 14                        & Запрос уже отправлен                                                                                             \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+\multirow{5}{*}{12}             & \multirow{2}{*}{9}        & \begin{tabular}[c]{@{}l@{}}Некритичная ошибка\\ (ENOBUFS | EAGAIN| ETIMEDOUT)\end{tabular}                       \\ \cline{3-3} 
+                                &                           & \begin{tabular}[c]{@{}l@{}}Сетевая ошибка\\ (если сброшен флаг SOFTCONN)\end{tabular}                            \\ \cline{2-3} 
+                                & 13                        & Соединение установлено                                                                                           \\ \cline{2-3} 
+                                & 14                        & Запрос уже отправлен                                                                                             \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+13                              & 14                        & \multicolumn{1}{c|}{-}                                                                                           \\ \hline
+\multirow{5}{*}{14}             & 8                         & EBADMSG                                                                                                          \\ \cline{2-3} 
+                                & 9                         & ENOMEM | ENOBUFS | EBADSLT | EAGAIN                                                                              \\ \cline{2-3} 
+                                & 13                        & \begin{tabular}[c]{@{}l@{}}Сетевая ошибка\\ (если сброшен флаг SOFTCONN)\end{tabular}                            \\ \cline{2-3} 
+                                & 15                        & Запрос передан                                                                                                   \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+\multirow{4}{*}{15}             & \multirow{2}{*}{8}        & \begin{tabular}[c]{@{}l@{}}Сетевая ошибка\\ (если сброшен флаг SOFTCONN)\end{tabular}                            \\ \cline{3-3} 
+                                &                           & EAGAIN | ENFILE | ENOBUFS | ENOMEM                                                                               \\ \cline{2-3} 
+                                & 16                        & Запрос выполнен успешно                                                                                          \\ \cline{2-3} 
+                                & 17                        & Иная ошибка                                                                                                      \\ \hline
+\end{tabular}
+    \end{threeparttable}
+\end{table}
+
+\clearpage
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+Продолжение таблицы~\ref{tbl:rpc_task_state_transfers}
+\begin{tabular}{|R{0.15\textwidth}|R{0.08\textwidth}|L{0.65\textwidth}|}
+\hline
+\multirow{4}{*}{16}             & 2                         & EKEYREJECTED                                                                                                     \\ \cline{2-3} 
+                                & 8                         & EAGAIN                                                                                                           \\ \cline{2-3} 
+                                & \multirow{2}{*}{17}       & Результат декодирован успешно                                                                                    \\ \cline{3-3} 
+                                &                           & Иная ошибка                                                                                                      \\ \hline
+\end{tabular}
+    \end{threeparttable}
+\end{table}
+
+Вне зависимости от выбранного подхода предварительно необходимо создать
+объект клиента --- структуру \code{rpc_clnt}, вызовом функции \code{rpc_create}
+(листинг~\ref{lst:rpc_create}).
+
+\begin{lstlisting}[caption={Создание клиента}, label={lst:rpc_create}]
+struct rpc_create_args {
+    struct net               *net;
+    int                       protocol;
+    struct sockaddr          *address;
+    size_t                    addrsize;
+    const struct rpc_program *program;
+    u32                       version;
+    rpc_authflavor_t          authflavor;
+    const struct cred        *cred;
+    unsigned long             flags;
+
+    struct sockaddr          *saddress;
+    const struct rpc_timeout *timeout;
+    const char               *servername;
+    const char               *nodename;
+    struct rpc_stat          *stats;
+    u32                       prognumber;
+    u32                       nconnect;
+    char                     *client_name;
+    struct svc_xprt          *bc_xprt;
+    unsigned int              max_connect;
+    struct xprtsec_parms      xprtsec;
+    unsigned long             connect_timeout;
+    unsigned long             reconnect_timeout;
+};
+
+struct rpc_clnt *rpc_create(struct rpc_create_args *args);
+\end{lstlisting}
+
+\subsubsection{Преобразование аргументов и результата}
 
 \subsection*{Вывод}
 
