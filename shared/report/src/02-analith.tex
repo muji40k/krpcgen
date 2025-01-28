@@ -23,11 +23,162 @@
 
 \subsection{Анализ протокола ONC RPC}
 
+Программа реализующая протокол ONC RPC называется сервисом и предоставляет
+доступ к одной или нескольким программам, которые, в свою очередь, реализуют
+одну или несколько удаленных процедур. Процедуры, их параметры и результаты
+документированы в спецификации протокола конкретной программы. Сервис
+поддерживает версионирование программ для поддержания совместимости с
+изменяющимися протоколами~\cite{rfc5531}.
+
 \subsubsection{Описание модели взаимодействия}
+
+Протокол ONC RPC основан на модели удаленного вызова процедур, которая
+аналогична модели локального вызова процедур, за исключением того, что поток
+управления проходит через два процесса: клиента и сервера~\cite{rfc5531}.
+Клиент посылает сообщение серверу и блокируется до получения ответа. Сообщение
+вызова содержит параметры процедуры, а ответа --- результаты работы процедуры.
+Когда ответ получен, результаты процедуры извлекаются, и процесс на клиентской
+стороне возобновляется.
+
+Ожидая поступления сообщений, процесс сервера засыпает, а при получении ---
+извлекает параметры процедуры, вызывает обработчик для вычисления результата и
+отправляет ответ.
+
+Таким образом с каждый момент времени активен только один процесс, однако
+протокол не накладывает никаких ограничений на реализуемую модель, и возможны
+другие варианты организации параллельных вычислений~\cite{rfc5531}.
+
+Протокол RPC может быть реализован для различных транспортных протоколов, при
+этом реализация протокола не регламентирует передачу сообщений от одного
+процесса к другому и включает в себя только спецификацию и способ интерпретации
+сообщений. Привязки конкретного клиента к конкретному сервису и транспортными
+параметрами также не является частью протокола RPC~\cite{rfc5531}. Для этого
+используются специальные приложения \code{portmapper}, в частности
+\code{rpcbind}, для связи информации о доступных сервисах и способах доступа к
+ним~\cite{rfc1833}.
 
 \subsubsection{Структурные части}
 
+Как уже было описано ранее сервис состоит из программ, которые содержат
+некоторое количество процедур, потенциально различных версий. Для их описания
+используется спецификация на языке RPC Language, который является расширением
+стандарта XDR для кодирования данных~\mbox{\cite{rfc5531}\cite{rfc4506}}.
+Грамматика расширения языка представлена на листинге~\ref{lst:rpcl} в
+форме Бэкуса-Наура.
+
+\begin{lstlisting}[caption={Структура RPCL}, label={lst:rpcl}]
+program-def:
+    "program" identifier "{"
+        version-def
+        version-def *
+    "}" "=" constant ";"
+version-def:
+    "version" identifier "{"
+        procedure-def
+        procedure-def *
+    "}" "=" constant ";"
+procedure-def:
+    proc-return identifier "("
+        proc-firstarg ("," type-specifier )*
+    ")" "=" constant ";"
+proc-return: "void" | type-specifier
+proc-firstarg: "void" | type-specifier
+\end{lstlisting}
+
+Ограничения~\cite{rfc5531}:
+\begin{itemize}
+    \item ключевые слова \code{program} и \code{version} не могут быть
+          использованы как идентификаторы;
+    \item идентификаторы программы и связанные с ними номера не могут
+          повторяться в контексте спецификации;
+    \item идентификаторы и связанные с ними номера версии не могут
+          повторяться в контексте программы;
+    \item идентификаторы и связанные с ними номера процедуры не могут
+          повторяться в контексте версии;
+    \item в качестве номеров могут быть использованы только беззнаковые
+          целые числа.
+\end{itemize}
+
 \subsubsection{Описание типов данных}
+
+Стандарт XDR в свою очередь предоставляет не только язык для описания типов
+данных, но и формат для их представления. Структура описания XDR представлена
+на листинге~\ref{lst:xdrl}.
+
+\clearpage
+
+\begin{lstlisting}[caption={Структура XDR}, label={lst:xdrl}]
+declaration:
+    type-specifier identifier
+    | type-specifier identifier "[" value "]"
+    | type-specifier identifier "<" [ value ] ">"
+    | "opaque" identifier "[" value "]"
+    | "opaque" identifier "<" [ value ] ">"
+    | "string" identifier "<" [ value ] ">"
+    | type-specifier "*" identifier
+    | "void"
+value:
+    constant | identifier
+type-specifier:
+    [ "unsigned" ] "int" | [ "unsigned" ] "hyper"
+    | "float" | "double" | "quadruple"
+    | "bool"
+    | enum-type-spec | struct-type-spec | union-type-spec
+    | identifier
+enum-type-spec:
+    "enum" enum-body
+enum-body:
+    "{" ( identifier "=" value ) ( "," identifier "=" value )* "}"
+struct-type-spec:
+    "struct" struct-body
+struct-body:
+    "{" ( declaration ";" ) ( declaration ";" )* "}"
+union-type-spec:
+    "union" union-body
+union-body:
+    "switch" "(" declaration ")" "{"
+    ( "case" value ":" declaration ";" )
+    ( "case" value ":" declaration ";" )*
+    [ "default" ":" declaration ";" ]
+    "}"
+constant-def:
+    "const" identifier "=" constant ";"
+type-def:
+    "typedef" declaration ";"
+    | "enum" identifier enum-body ";"
+    | "struct" identifier struct-body ";"
+    | "union" identifier union-body ";"
+definition:
+    type-def | constant-def
+specification:
+    definition *
+\end{lstlisting}
+
+\clearpage
+
+Нотация копирует синтаксис языка C, с добавлением некоторых
+особенностей~\cite{rfc4506}:
+\begin{itemize}
+    \item нотация \code{"<" [ value ] ">"} означает массив переменной длины с
+          возможным ограничением максимального количества элементов в
+          \code{value} элементов;
+    \item аналог объявления указателя из языка C, означает необязательное поле
+          и кодируется как массив переменной длины с ограничением в 1 элемент;
+    \item данные с типом \code{opaque} передаются без изменений (как массив
+          байт);
+    \item строка \code{string} нуль терминирована и передается как массив байт;
+    \item \code{bool} --- беззнаковое целое;
+    \item вещественные числа передаются как есть, так как документированы
+          стандартом IEEE 754.
+\end{itemize}
+
+Для представления данных XDR использует порядок байт от старшего к младшему и
+объединяет данные в блоки по 4 байта, поэтому длина любого сообщения должна
+быть кратна 4. Элементы массивов, структур кодируются в порядке описания
+(появления). В случае передачи массивов переменной длины, их размер
+записывается перед телом как беззнаковое 4 байтовое целое. Дискриминант
+объединения также записывается перед телом, аналогично как 4 байтовое
+целое~\cite{rfc4506}.
 
 \subsection{Поддержка в ядре Linux}
 
@@ -41,9 +192,10 @@
 
 \subsubsection{Инициализация и порядок работы сервера}
 
-Сервер описывается структурой \code{svc_serv} (листинг~\ref{lst:struct_svc_serv})
-и называется сервисом, который в свою очередь является демоном, отвечающим за
-прием и обработку сообщений, а так же поддержание потоков обработчиков.
+Сервер описывается структурой \code{svc_serv}
+(листинг~\ref{lst:struct_svc_serv}) и называется сервисом, который в свою
+очередь является демоном, отвечающим за прием и обработку сообщений, а так же
+поддержание потоков обработчиков.
 
 \begin{lstlisting}[caption={Структура сервиса}, label={lst:struct_svc_serv}]
 struct svc_serv {
@@ -135,6 +287,8 @@ struct svc_program {
 };
 \end{lstlisting}
 
+\clearpage
+
 \begin{lstlisting}[caption={Структура версии}, label={lst:struct_svc_version}]
 struct svc_version {
     /* Номер версии */
@@ -181,6 +335,8 @@ struct svc_procedure {
 транспортной инфраструктуры. Типичная последовательность запуска представлена
 на листинге~\ref{lst:svc_start_proc}.
 
+\clearpage
+
 \begin{lstlisting}[caption={Последовательность регистрации и запуска сервиса}, label={lst:svc_start_proc}]
 // 1
 int svc_bind(struct svc_serv *serv, struct net *net);
@@ -201,19 +357,19 @@ int svc_set_num_threads(struct svc_serv *serv, struct svc_pool *pool,
 Регистрация же производится при создании нового транспорта в функции
 \code{svс_xprt_create}. Зарегистрированные протоколы содержатся в списке
 \code{svc_xprt_class_list} и описываются структурой \code{svc_xprt_class}
-(листинг~\ref{lst:struct_svc_xprt_class}). В настоящий момент возможно
-использовать только TCP или UDP. Вызов \code{svc_xprt_create} осуществляет
-поиск транспорта по его названию, переданному параметром \code{xprt_name},
-после чего вызывается метод \code{xpo_create}, значение которого совпадает для
-обоих протоколов --- \code{svc_create_socket}. Функция создает сокет
-(\code{__sock_create}), связывает его с переданным адресом
-(\code{kernel_bind}) и вызывает \code{setup_socket}, где и происходит
-регистрация нового сервиса вызовом \code{svc_register}, который вызывает метод
-\code{pg_rpcbind_set} текущей программы для каждой ее версии. При
-использовании rpcbind, в ядре определена стандартная реализация метода ---
-\code{svc_generic_rpcbind_set}.
+(листинги~\refrange{lst:struct_svc_xprt_class1}{lst:struct_svc_xprt_class2}). В
+настоящий момент возможно использовать только TCP или UDP. Вызов
+\code{svc_xprt_create} осуществляет поиск транспорта по его названию,
+переданному параметром \code{xprt_name}, после чего вызывается метод
+\code{xpo_create}, значение которого совпадает для обоих протоколов ---
+\code{svc_create_socket}. Функция создает сокет (\code{__sock_create}),
+связывает его с переданным адресом (\code{kernel_bind}) и вызывает
+\code{setup_socket}, где и происходит регистрация нового сервиса вызовом
+\code{svc_register}, который вызывает метод \code{pg_rpcbind_set} текущей
+программы для каждой ее версии. При использовании rpcbind, в ядре определена
+стандартная реализация метода --- \code{svc_generic_rpcbind_set}.
 
-\begin{lstlisting}[caption={Структура транспортного протокола и операции над ним}, label={lst:struct_svc_xprt_class}]
+\begin{lstlisting}[caption={Структура транспортного протокола (часть 1)}, label={lst:struct_svc_xprt_class1}]
 struct svc_xprt_class {
     const char                *xcl_name;
     struct module             *xcl_owner;
@@ -227,6 +383,8 @@ struct svc_xprt_ops {
                                    struct net *net,
                                    struct sockaddr *, int,
                                    int);
+\end{lstlisting}
+\begin{lstlisting}[caption={Структура транспортного протокола (часть 2)}, label={lst:struct_svc_xprt_class2}]
     struct svc_xprt *(*xpo_accept)(struct svc_xprt *);
     int              (*xpo_has_wspace)(struct svc_xprt *);
     int              (*xpo_recvfrom)(struct svc_rqst *);
@@ -250,7 +408,8 @@ struct svc_xprt_ops {
 Минимальный пример реализации представлен на листинге \ref{lst:threadfn}.
 
 \begin{lstlisting}[caption={Минимальная реализация функции потока}, label={lst:threadfn}]
-int threadfn(void *data) {
+int threadfn(void *data)
+{
     struct svc_rqst *rqstp = data;
     svc_thread_init_status(rqstp, 0);
 
@@ -284,7 +443,6 @@ int threadfn(void *data) {
 которой представлен на
 рисунках~\refrange{fig:algorithm_svc_process}{fig:algorithm_svc_process_common_2}.
 
-\clearpage
 \vspace*{\fill}
 \begin{figure}[!h]
     \centering
@@ -336,7 +494,8 @@ int threadfn(void *data) {
 Минимальный пример такой функции представлен в листинге~\ref{lst:dispatch}.
 
 \begin{lstlisting}[caption={Минимальная реализация функции диспетчеризации}, label={lst:dispatch}]
-int dispatch(struct svc_rqst *rqstp) {
+int dispatch(struct svc_rqst *rqstp)
+{
     const struct svc_procedure *proc = rqstp->rq_procinfo;
     __be32 *statp = rqstp->rq_accept_statp;
     if (!proc->pc_decode(rqstp, &rqstp->rq_arg_stream)) {
@@ -757,6 +916,10 @@ ssize_t xdr_stream_decode_string_dup(struct xdr_stream *xdr,
                                      gfp_t gfp_flags);
 \end{lstlisting}
 
-
 \subsection*{Вывод}
+
+В этом разделе был рассмотрен и изучен протокол ONC RPC. Были выделены его
+составные части, особенности их представления и кодирования. Была рассмотрена
+реализация протокола в ядре Linux для клиента и сервера, определены необходимые
+функции и структуры для запуска и работы минимального сервиса.
 

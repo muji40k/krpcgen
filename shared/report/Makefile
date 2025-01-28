@@ -49,7 +49,7 @@ $(ORIGIN_OUT)/.build%: | $(TARGET_DIRS)
 	touch $@
 
 view: release
-	$(VIEWER) $(targets) &
+	$(VIEWER) $(targets) &>/dev/null &
 
 test:
 	@echo SVGS        := $(SVGS)
@@ -70,7 +70,7 @@ $(TARGET_DIRS):
 %.pdf: %.tex $(DEPS) | $(TARGET_DIRS)
 	pdflatex --output-dir=$(ORIGIN_OUT) $(CREATE_STR)
 ifeq ($(FAST), 0)
-	bibtex $(ORIGIN_OUT)/$(@:.pdf=.aux) || true
+	bibtex $(ORIGIN_OUT)/$(@:.pdf=.aux)
 	pdflatex --output-dir=$(ORIGIN_OUT) $(CREATE_STR)
 	pdflatex --output-dir=$(ORIGIN_OUT) $(CREATE_STR)
 endif
