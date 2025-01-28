@@ -32,11 +32,13 @@ pub fn generate_program_auth_encode_declaration(_: &handle::Handle, file: &mut d
 
 pub fn generate_program_declaraion(_: &handle::Handle, file: &mut dyn File, progr: &rpc::Program) {
     IteratorPrinter::from([
+        format!("static struct rpc_stat stats = {{}};"),
         format!("static const struct rpc_program {}_program = {{", progr.name),
         format!("    .name = \"{}\",", progr.name),
         format!("    .number = {},", progr.name),
         format!("    .nrvers = ARRAY_SIZE({}_versions),", progr.name),
         format!("    .version = {}_versions,", progr.name),
+        format!("    .stats = &stats,"),
         format!("}};"),
     ]).print(file)
 }
