@@ -1,0 +1,277 @@
+\leftsection{Конструкторская часть}
+
+\vspace{-1\baselineskip}
+
+\subsection{Требования к программе}
+
+К разрабатываемому приложения выдвигаются следующие требования:
+\begin{itemize}
+    \item поддержка и разбор спецификации на языке rpcl;
+    \item возможность раздельной загрузки и использования модулей разных
+          программ;
+    \item возможность конфигурирования порта и адреса модуля сервера;
+    \item возможность использования предоставляемых процедур из сторонних
+          модулей.
+\end{itemize}
+
+\subsection{Схема алгоритма программы}
+
+Алгоритм работы приложения может быть разбит на следующие этапы, представленные
+на рисунке~\ref{fig:main_alg}.
+
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.18\textwidth}
+    \input{main_alg.pdf_tex}
+    \caption{Декомпозиция алгоритма работы программы}
+    \label{fig:main_alg}
+\end{figure}
+
+\subsubsection{Преобразование текста спецификации}
+
+Для обеспечения единообразия разбора определений описанного сервиса код
+спецификации необходимо преобразовать в набор заранее описанных лексических
+единиц --- токенов. Согласно структуре языка, описанной в
+листингах~\ref{lst:xdrl} и~\ref{lst:rpcl}, можно выделить следующие группы
+токенов:
+
+\begin{itemize}
+    \item идентификатор;
+    \item ключевое слово (\code{"const"}, \code{"case"}, \code{"switch"},
+          \code{"default"}, \code{"typedef"}, \code{"program"},
+          \code{"version"}, \code{"procedure"});
+    \item скобки (круглые \code{"()"}, фигурные \verb+"{}"+,
+          квадратные \code{"[]"}, треугольные \code{"<>"});
+    \item идентификатор типа (\code{"void"}, \code{"unsigned"},
+          \code{"integer"}, \code{"hyper"}, \code{"float"}, \code{"double"},
+          \code{"boolean"}, \code{"quadruple"}, \code{"string"},
+          \code{"opaque"}, \code{"pointer"}, \code{"enum"}, \code{"struct"},
+          \code{"union"});
+    \item разделитель (точка с запятой \code{";"}, двоеточие \code{":"},
+          запятая \code{","});
+    \item оператор присвоения \code{"="};
+    \item целочисленный литерал;
+    \item комментарий.
+\end{itemize}
+
+На рисунках~\refrange{fig:lexer_alg1}{fig:lexer_alg2} представлен алгоритм
+преобразования текста спецификации в набор токенов. Подразумевается, что
+алгоритму доступен массив набора правил для сопоставления текущего символа.
+Принцип работы такого набора правил сводится к последовательному сравнению
+поставляемых символов с заранее заданным массивом или проверке его
+принадлежности определенному подмножеству символов алфавита. В качестве
+пропускаемых символов выступают все пробельные символы.
+
+Был определен следующий приоритет групп токенов: разделители, скобки, литералы,
+ключевые слова, идентификаторы типа, операторы, идентификаторы, комментарии.
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{lexer_alg1.pdf_tex}
+    \caption{Алгоритм лексического анализа текста спецификации (часть 1)}
+    \label{fig:lexer_alg1}
+\end{figure}
+\vspace{\fill}
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.7\textwidth}
+    \input{lexer_alg2.pdf_tex}
+    \caption{Алгоритм лексического анализа текста спецификации (часть 2)}
+    \label{fig:lexer_alg2}
+\end{figure}
+\vspace{\fill}
+\clearpage
+
+\subsubsection{Разбор определений}
+
+В соответствии с лиитингами~\ref{lst:rpcl} и~\ref{lst:xdrl}, спецификация может
+состоять из 3 видов определений:
+\begin{enumerate}
+    \item определение константы;
+    \item определение типа;
+    \item определение программы.
+\end{enumerate}
+
+Алгоритм преобразования потока токенов в поток определений представлен на
+рисунках~\refrange{fig:parser_alg}{fig:parser_procedure_args_alg}
+
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{parser_alg.pdf_tex}
+    \caption{Алгоритм разбора токенов}
+    \label{fig:parser_alg}
+\end{figure}
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \begin{minipage}{0.63\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_const_alg.pdf_tex}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.35\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_typedef_alg.pdf_tex}
+    \end{minipage}
+    \caption{Алгоритм разбора константы и \code{typedef}}
+    \label{fig:parser_const_typedef_alg}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \begin{minipage}{0.6\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_enum_alg.pdf_tex}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.35\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_enum_body_alg.pdf_tex}
+    \end{minipage}
+    \caption{Алгоритм разбора \code{enum}}
+    \label{fig:parser_enum_alg}
+\end{figure}
+\vfill
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \begin{minipage}{0.6\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_struct_alg.pdf_tex}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.35\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_struct_body_alg.pdf_tex}
+    \end{minipage}
+    \caption{Алгоритм разбора \code{struct}}
+    \label{fig:parser_struct_alg}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \begin{minipage}{0.55\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_union_alg1.pdf_tex}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.4\textwidth}\centering
+        \def\svgwidth{\linewidth}
+        \input{parser_union_alg2.pdf_tex}
+    \end{minipage}
+    \caption{Алгоритм разбора \code{union} (часть 1)}
+    \label{fig:parser_union_alg1}
+\end{figure}
+\vfill
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.6\textwidth}
+    \input{parser_union_alg3.pdf_tex}
+    \caption{Алгоритм разбора \code{union} (часть 2)}
+    \label{fig:parser_union_alg2}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{parser_union_body_alg.pdf_tex}
+    \caption{Алгоритм разбора тела \code{union}}
+    \label{fig:parser_union_body_alg}
+\end{figure}
+\vfill
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{parser_program_alg.pdf_tex}
+    \caption{Алгоритм разбора программы}
+    \label{fig:parser_program_alg}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.4\textwidth}
+    \input{parser_program_body_alg.pdf_tex}
+    \caption{Алгоритм разбора тела программы}
+    \label{fig:parser_program_body_alg}
+\end{figure}
+\vfill
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{parser_version_alg.pdf_tex}
+    \caption{Алгоритм разбора версии}
+    \label{fig:parser_version_alg}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.4\textwidth}
+    \input{parser_version_body_alg.pdf_tex}
+    \caption{Алгоритм разбора тела версии}
+    \label{fig:parser_version_body_alg}
+\end{figure}
+\vfill
+
+\clearpage
+
+\vspace*{\fill}
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{\textwidth}
+    \input{parser_procedure_alg.pdf_tex}
+    \caption{Алгоритм разбора процедуры}
+    \label{fig:parser_procedure_alg}
+\end{figure}
+\vfill
+\begin{figure}[!h]
+    \centering
+    \def\svgwidth{0.5\textwidth}
+    \input{parser_procedure_args_alg.pdf_tex}
+    \caption{Алгоритм разбора тела процедуры}
+    \label{fig:parser_procedure_args_alg}
+\end{figure}
+\vfill
+
+\clearpage
+
+\subsubsection{Генерация кода модулей}
+
+Алгоритм генерации модулей зависит от макета, который будет разработан в
+разделе~\ref{sec:prototype}, и потому не будет приведен в качестве схемы. Общая
+идея заключается в создании отдельного модуля для каждой программы. Между собой
+модули будут разделять определения констант и типов.
+
+\subsection*{Вывод}
+
+В данном разделе были разработаны схемы алгоритмов составных частей приложения,
+а именно преобразования текста программы в поток единиц трансляции
+(рисунки~\refrange{fig:lexer_alg1}{fig:lexer_alg2}) и его последующего разбора
+в поток определений
+(рисунки~\refrange{fig:parser_alg}{fig:parser_procedure_args_alg})
+

@@ -76,8 +76,7 @@ ifeq ($(FAST), 0)
 endif
 	mv $(ORIGIN_OUT)/$@ .
 
-.PRECIOUS: $(SVGS:%.svg=$(ORIGIN_OUT)/%.pdf_tex)
-$(ORIGIN_OUT)/%.pdf_tex: %.svg | $(TARGET_DIRS)
+$(ORIGIN_OUT)/%.pdf_tex: %.svg | $(TARGET_DIRS) # Can not be parallel :'(
 	inkscape -D -z --file=$^ --export-pdf=$(@:_tex=) --export-latex
 
 clean:
