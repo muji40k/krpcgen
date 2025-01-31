@@ -2236,10 +2236,106 @@ fn parse_procedure_args(
 
 Из соображений о размере отчета, код генерации модулей приведен не будет.
 
+\subsection{Конфигурирование генерируемых модулей}
+
+Для обеспечения некоторой гибкости генерируемых модулей, была добавлена
+возможность их конфигурации, а именно: возможность выбора порта и количества
+потоков для сервера; возможность указания ip и порта назначения сервера, а
+также требуемой версии для клиента. Для реализации использовался макрос
+\code{module_param}. Исходный код представлен на
+листингах~\refrange{lst:server_config}{lst:client_config}.
+
+\begin{lstlisting}[caption={Конфигурирование сервера}, label={lst:server_config}]
+static unsigned short port = 0;
+module_param(port, ushort, 0);
+
+static unsigned int threads = 1;
+module_param(threads, uint, 0);
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Конфигурирование клиента}, label={lst:client_config}]
+static unsigned int version = 1;
+module_param(version, uint , 0);
+
+static unsigned int host_ip_size = 4;
+static unsigned char host_ip[4] = {127, 0, 0 ,1};
+module_param_array(host_ip, byte, &host_ip_size, 0);
+
+static unsigned short port = 0;
+module_param(port, ushort, 0);
+
+static __be32 decode_host_ip(void) {
+    __u8 decode_buffer[4];
+
+    for (size_t i = 0; host_ip_size > i; i++) {
+        decode_buffer[i] = host_ip[i];
+    }
+
+    for (size_t i = host_ip_size; 4 > i; i++) {
+        decode_buffer[i] = 0;
+    }
+
+    return *(__be32*)decode_buffer;
+}
+\end{lstlisting}
+
 \subsection{Тестирование разработанного приложения}
+
+Результаты тестирования представлены в
+таблицах~\refrange{tbl:test_lexer}{tbl:test_parser} и на
+рисунках~\refrange{fig:test_lexer}{fig:test_parser}.
+
+\vfill
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+        \caption{Тестирование лексического анализатора}
+\begin{tabular}{|r|l|l|}
+\hline
+\multicolumn{1}{|c|}{№} & \multicolumn{1}{c|}{Исходные данные}                                                                   & \multicolumn{1}{c|}{Ожидаемый результат} \\ \hline
+1                       & \begin{tabular}[c]{@{}l@{}}Ping программа из\\ стандарта~\cite{rfc5531}\end{tabular}                       & Соответствующий набор токенов            \\ \hline
+2                       & \begin{tabular}[c]{@{}l@{}}Bakery из курса\\ операционных систем\end{tabular}                          & Соответствующий набор токенов            \\ \hline
+3                       & \begin{tabular}[c]{@{}l@{}}Разбор неиспользованных\\ типов \texttt{enum} и \texttt{union}\end{tabular} & Соответствующий набор токенов            \\ \hline
+\end{tabular}
+        \label{tbl:test_lexer}
+    \end{threeparttable}
+\end{table}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{test_lexer.png}
+    \caption{Тестирование лексического анализатора}
+    \label{fig:test_lexer}
+\end{figure}
+\vfill
+
+\clearpage
+
+\begin{table}[htb!]
+    \centering
+    \begin{threeparttable}
+        \caption{Тестирование синтаксического анализатора}
+\begin{tabular}{|r|l|l|}
+\hline
+\multicolumn{1}{|c|}{№} & \multicolumn{1}{c|}{Исходные данные}                                            & \multicolumn{1}{c|}{Ожидаемый результат}                                                                                                                                                                                                                                                                       \\ \hline
+1                       & \begin{tabular}[c]{@{}l@{}}Ping программа\\ изстандарта\end{tabular}            & \begin{tabular}[c]{@{}l@{}}Определенией программы PING\_PROGR,\\ содержащее 2 верcии: PING\_VERS\_PINGBACK,\\ состоящей из двух процедур PINGPROC\_NULL\\ и PINGPROC\_PINGBACK;\\ PING\_VERS\_PINGBACK, состоящей из одной\\ процедуры PINGPROC\_NULL, а также\\ определение константы PING\_VERS\end{tabular} \\ \hline
+2                       & \begin{tabular}[c]{@{}l@{}}Bakery из курса\\ операционных\\ систем\end{tabular} & \begin{tabular}[c]{@{}l@{}}Определение констант, определение структуры\\ BAKERY,определение программы\\ BAKERY\_PROG с версией BAKERY\_VER и\\ процедурой BACKERY\_PROC\end{tabular}                                                                                                                           \\ \hline
+3                       & \begin{tabular}[c]{@{}l@{}}Разбор\\ неиспользованных\\ типов enum\end{tabular}  & Определение enum                                                                                                                                                                                                                                                                                               \\ \hline
+\end{tabular}
+        \label{tbl:test_parser}
+    \end{threeparttable}
+\end{table}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{test_parser.png}
+    \caption{Тестирование синтаксического анализатора}
+    \label{fig:test_parser}
+\end{figure}
 
 \subsection*{Вывод}
 
-В данном разделе были рассмотрены: структура разрабатываемого приложения,
-средства и детали реализации программного продукта.
+В данном разделе были рассмотрены: структура разрабатываемого приложения и
+генерируемых модулей ядра, средства и детали реализации программного продукта.
 
