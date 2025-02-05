@@ -15,11 +15,17 @@ pub fn generate_version_definition(_: &handle::Handle, file: &mut dyn File, ver:
 
 pub fn generate_version_declaraion(handle: &handle::Handle, file: &mut dyn File, ver: &rpc::Version) {
     let argsize = ver.procedures.values().map(|proc| {
-        proc.arguments.iter().map(|tp| {
+        let res = types::generate_xdr_size(handle, &proc.return_type);
+        let arg = proc.arguments.iter().map(|tp| {
             types::generate_xdr_size(handle, tp)
         }).filter(|v| "0" != v)
-            .reduce(|a, b| a + "+" + &b)
-            .unwrap_or_else(|| String::from("0"))
+            .reduce(|a, b| a + "+" + &b);
+
+        match (res.as_str(), arg) {
+            ("0", arg) => arg.unwrap_or_else(|| String::from("0")),
+            (_, None) => res,
+            (_, Some(arg)) => format!("STATIC_MAX(({res}), ({arg}))")
+        }
     }).filter(|v| "0" != v)
         .reduce(|a, b| format!("STATIC_MAX(({a}), ({b}))"))
         .unwrap_or_else(|| String::from("0"));
