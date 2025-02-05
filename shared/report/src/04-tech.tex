@@ -2,12 +2,13 @@
 
 \vspace{-1\baselineskip}
 
-\subsection{Средства реализации}
+\subsection{Выбор языка и среды программирования}
 
 В качестве языка реализации приложения был выбран rust из-за развитой системы
 типов, позволяющей описывать и обрабатывать потоки ввода, токенов и определений
 преимущественно декларативно. Для модулей ядра был выбран язык C, так как это
-язык реализации операционной системы Linux.
+язык реализации операционной системы Linux. Использовался пакетный менеджер
+cargo и компилятор rustc.
 
 \subsection{Макет разрабатываемых модулей ядра} \label{sec:prototype}
 
@@ -28,8 +29,7 @@
 
 MODULE_LICENSE("GPL");
 
-static bool u64_arg(struct svc_rqst *rqstp, struct xdr_stream *xdr)
-{
+static bool u64_arg(struct svc_rqst *rqstp, struct xdr_stream *xdr) {
     u64 *arg = rqstp->rq_argp;
     if (0 != xdr_stream_decode_u64(xdr, arg)) {
         return false;
@@ -2333,9 +2333,4 @@ static __be32 decode_host_ip(void) {
     \caption{Тестирование синтаксического анализатора}
     \label{fig:test_parser}
 \end{figure}
-
-\subsection*{Вывод}
-
-В данном разделе были рассмотрены: структура разрабатываемого приложения и
-генерируемых модулей ядра, средства и детали реализации программного продукта.
 

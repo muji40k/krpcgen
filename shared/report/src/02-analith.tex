@@ -30,7 +30,7 @@
 поддерживает версионирование программ для поддержания совместимости с
 изменяющимися протоколами~\cite{rfc5531}.
 
-\subsubsection{Описание модели взаимодействия}
+\subsubsection{Анализ модели взаимодействия}
 
 Протокол ONC RPC основан на модели удаленного вызова процедур, которая
 аналогична модели локального вызова процедур, за исключением того, что поток
@@ -57,7 +57,7 @@
 \code{rpcbind}, для связи информации о доступных сервисах и способах доступа к
 ним~\cite{rfc1833}.
 
-\subsubsection{Структурные части}
+\subsubsection{Анализ структурных частей протокола}
 
 Как уже было описано ранее сервис состоит из программ, которые содержат
 некоторое количество процедур, потенциально различных версий. Для их описания
@@ -99,7 +99,7 @@ proc-firstarg: "void" | type-specifier
           целые числа.
 \end{itemize}
 
-\subsubsection{Описание типов данных}
+\subsubsection{Анализ типов данных стандарта XDR}
 
 Стандарт XDR в свою очередь предоставляет не только язык для описания типов
 данных, но и формат для их представления. Структура описания XDR представлена
@@ -180,7 +180,7 @@ specification:
 объединения также записывается перед телом, аналогично как 4 байтовое
 целое~\cite{rfc4506}.
 
-\subsection{Поддержка в ядре Linux}
+\subsection{Анализ поддержки в ядре Linux}
 
 В ядре реализация RPC представлена в составе модуля \code{sunrpc}, который
 может быть скомпилирован как часть ядра или загружаемый модуль.
@@ -190,7 +190,7 @@ specification:
 база для написания клиента и сервера приложения. В дальнейшем, структуры и
 функции будут рассматриваться для версии ядра 6.12.7~\cite{LinuxKernel6127}.
 
-\subsubsection{Инициализация и порядок работы сервера}
+\subsubsection{Анализ инициализации и порядка работы сервера}
 
 Сервер описывается структурой \code{svc_serv}
 (листинг~\ref{lst:struct_svc_serv}) и называется сервисом, который в свою
@@ -511,7 +511,7 @@ int dispatch(struct svc_rqst *rqstp)
 }
 \end{lstlisting}
 
-\subsubsection{Порядок выполнения запроса}
+\subsubsection{Анализ порядка выполнения запроса}
 
 Аналогичные структуры для описания программы определены и для клиента
 (листинги~\refrange{lst:struct_rpc_program}{lst:struct_rpc_procedure}).
@@ -796,7 +796,7 @@ struct rpc_clnt *rpc_create(struct rpc_create_args *args);
           создании клиента.
 \end{itemize}
 
-\subsubsection{Преобразование аргументов и результата}
+\subsubsection{Анализ преобразования аргументов и результата}
 
 Для кодирования и декодирования сообщения определена структура и операции над
 ней для поточного преобразования буфера
@@ -906,20 +906,43 @@ ssize_t xdr_stream_decode_opaque(struct xdr_stream *xdr, void *ptr,
                                  size_t size);
 \end{lstlisting}
 \begin{lstlisting}[caption={Функции для декодирования (часть 2)}, label={lst:xdr_decode2}]
-ssize_t xdr_stream_decode_opaque_dup(struct xdr_stream *xdr,
-                                     void **ptr, size_t maxlen,
-                                     gfp_t gfp_flags);
+ssize_t xdr_stream_decode_opaque_dup(struct xdr_stream *xdr, void **p,
+                                     size_t maxlen, gfp_t gfp_flags);
 ssize_t xdr_stream_decode_string(struct xdr_stream *xdr, char *str,
                                  size_t size);
-ssize_t xdr_stream_decode_string_dup(struct xdr_stream *xdr,
-                                     char **str, size_t maxlen,
-                                     gfp_t gfp_flags);
+ssize_t xdr_stream_decode_string_dup(struct xdr_stream *xdr, char **s,
+                                     size_t maxlen, gfp_t gfp_flags);
 \end{lstlisting}
 
-\subsection*{Вывод}
+\subsection*{Выводы}
 
-В этом разделе был рассмотрен и изучен протокол ONC RPC. Были выделены его
-составные части, особенности их представления и кодирования. Была рассмотрена
-реализация протокола в ядре Linux для клиента и сервера, определены необходимые
-функции и структуры для запуска и работы минимального сервиса.
+В результате анализа протокола ONC RPC и его реализации в ядре операционной
+системы Linux, было установлено, что для генерации кода модулей ядра,
+взаимодействующих по модели клиент-сервер, необходимо:
+\begin{itemize}
+    \item определить соответствующие структуры программ, версий и процедур для клиента
+          (\code{rpc_program}, \code{rpc_version}, \code{rpc_procedure}) и
+          сервера\\ (\code{svc_program}, \code{svc_version}, \code{svc_procedure}). Описание сервиса состоит из инициализации структуры
+          программы, которая должна содержать функции аутентификации,
+          инициализации контекста потока и регистрации у \code{portmapper},
+          структуры версии, содержащей максимальный размер буфера XDR и функцию
+          диспетчеризации, а также процедур, предоставляющих соответствующий
+          обработчик и функции для кодирования результата и декодирования
+          аргументов;
+    \item запустить сервер, путем последовательного вызова функций:
+    \begin{enumerate}
+        \item \code{svc_create} для создания структуры сервиса;
+        \item \code{svc_bind} для удаления записи об используемых номерах программ, версий и процедур
+              у \code{portmapper} в случае повторного появления;
+        \item \code{svc_xprt_create} для связи сервиса с транспортным протоколом
+              и регистрации у \code{portmapper};
+        \item \code{svc_set_num_threads} для запуска сервиса;
+    \end{enumerate}
+    \item произвести вызов, при помощи следующих функций:
+    \begin{enumerate}
+        \item \code{rpc_cred} для создания структуры клиента;
+        \item \code{rpc_call_sync} и \code{rpc_call_async} для вызова удаленной
+              процедуры.
+    \end{enumerate}
+\end{itemize}
 
